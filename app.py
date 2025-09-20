@@ -162,7 +162,14 @@ class ExcelComparator:
             if key_val_a in b_lookup:
                 match_data = b_lookup[key_val_a]
                 result_row = row_a.to_dict()
-                result_row.update(match_data['data'])
+                
+                # Add extracted data from Sheet B with clear column naming
+                if match_data['data']:
+                    for col_name, col_value in match_data['data'].items():
+                        # Prefix columns from Sheet B to avoid conflicts
+                        prefixed_col_name = f"SheetB_{col_name}" if col_name in result_row else col_name
+                        result_row[prefixed_col_name] = col_value
+                
                 result_row['match_type'] = 'Exact'
                 result_row['similarity_score'] = 100.0
                 result_row['matched_key'] = match_data['original_key']
@@ -184,7 +191,14 @@ class ExcelComparator:
                     match_data = b_lookup[matched_key]
                     
                     result_row = row_a.to_dict()
-                    result_row.update(match_data['data'])
+                    
+                    # Add extracted data from Sheet B with clear column naming
+                    if match_data['data']:
+                        for col_name, col_value in match_data['data'].items():
+                            # Prefix columns from Sheet B to avoid conflicts
+                            prefixed_col_name = f"SheetB_{col_name}" if col_name in result_row else col_name
+                            result_row[prefixed_col_name] = col_value
+                    
                     result_row['match_type'] = 'Fuzzy'
                     result_row['similarity_score'] = similarity
                     result_row['matched_key'] = match_data['original_key']
@@ -676,147 +690,102 @@ class ExcelComparator:
         rec_ws.write('A2', 'Actionable recommendations based on comparison results and data quality analysis')
     
     def show_column_analysis(self, df: pd.DataFrame, column_name: str, file_name: str):
-        """Enhanced column analysis with actionable insights"""
+        """Clean and organized column analysis display"""
         
-        st.subheader(f"📊 Data Quality Analysis: {column_name}")
-        
-        # Basic statistics in metrics
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("Total Rows", f"{len(df):,}")
-        with col2:  
-            unique_count = df[column_name].nunique()
-            st.metric("Unique Values", f"{unique_count:,}")
-        with col3:
-            null_count = df[column_name].isnull().sum()
-            null_pct = (null_count / len(df)) * 100
-            st.metric("Missing Values", f"{null_count:,} ({null_pct:.1f}%)")
-        with col4:
-            duplicate_count = len(df) - unique_count
-            st.metric("Duplicates", f"{duplicate_count:,}")
-        
-        # Data quality alerts
-        alerts = []
-        if null_pct > 10:
-            alerts.append(f"⚠️ High missing data rate ({null_pct:.1f}%). Consider data cleaning.")
-        
-        if duplicate_count > len(df) * 0.5:
-            alerts.append(f"⚠️ High duplicate rate ({(duplicate_count/len(df)*100):.1f}%). May affect matching accuracy.")
-        
-        if unique_count == len(df) and null_count == 0:
-            alerts.append(f"✅ Perfect key column - all values are unique!")
-        
-        # Show alerts
-        if alerts:
-            for alert in alerts:
-                if "✅" in alert:
-                    st.success(alert)
-                else:
-                    st.warning(alert)
-        
-        # Advanced analysis in expandable sections
-        col_left, col_right = st.columns(2)
-        
-        with col_left:
-            with st.expander("📋 Sample Data Preview", expanded=False):
-                # Sample data with metadata
-                sample_data = df[column_name].dropna().head(10).tolist()
-                
-                if sample_data:
-                    sample_df = pd.DataFrame({
-                        'Sample Values': sample_data,
-                        'Length': [len(str(x)) for x in sample_data],
-                        'Type': [type(x).__name__ for x in sample_data]
-                    })
-                    st.dataframe(sample_df, hide_index=True, use_container_width=True)
-                else:
-                    st.info("No non-null values found")
-        
-        with col_right:
-            with st.expander("🔍 Pattern Detection", expanded=False):
-                # Pattern analysis for text columns
-                if df[column_name].dtype == 'object':
-                    patterns_found = []
-                    
-                    # Email pattern
-                    email_pattern = df[column_name].str.contains(r'@\w+\.\w+', na=False, regex=True).sum()
-                    if email_pattern > 0:
-                        patterns_found.append(f"📧 Email addresses: {email_pattern} ({(email_pattern/len(df)*100):.1f}%)")
-                    
-                    # Phone pattern
-                    phone_pattern = df[column_name].str.contains(r'\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b', na=False, regex=True).sum()
-                    if phone_pattern > 0:
-                        patterns_found.append(f"📞 Phone numbers: {phone_pattern} ({(phone_pattern/len(df)*100):.1f}%)")
-                    
-                    # Date pattern
-                    date_pattern = df[column_name].str.contains(r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b', na=False, regex=True).sum()
-                    if date_pattern > 0:
-                        patterns_found.append(f"📅 Date-like values: {date_pattern} ({(date_pattern/len(df)*100):.1f}%)")
-                    
-                    # ID pattern (alphanumeric)
-                    id_pattern = df[column_name].str.contains(r'^[A-Za-z0-9]+$', na=False, regex=True).sum()
-                    if id_pattern > 0:
-                        patterns_found.append(f"🆔 ID-like values: {id_pattern} ({(id_pattern/len(df)*100):.1f}%)")
-                    
-                    # Number pattern
-                    number_pattern = df[column_name].str.contains(r'^\d+$', na=False, regex=True).sum()
-                    if number_pattern > 0:
-                        patterns_found.append(f"🔢 Numeric strings: {number_pattern} ({(number_pattern/len(df)*100):.1f}%)")
-                    
-                    if patterns_found:
-                        for pattern in patterns_found:
-                            st.info(pattern)
-                    else:
-                        st.write("No common patterns detected")
-                
-                else:
-                    # Numeric column analysis
-                    st.write("**Numeric Column Statistics:**")
-                    try:
-                        col_stats = df[column_name].describe()
-                        st.write(f"• Mean: {col_stats['mean']:.2f}")
-                        st.write(f"• Median: {col_stats['50%']:.2f}")
-                        st.write(f"• Min: {col_stats['min']:.2f}")
-                        st.write(f"• Max: {col_stats['max']:.2f}")
-                        st.write(f"• Std Dev: {col_stats['std']:.2f}")
-                    except:
-                        st.write("Unable to calculate numeric statistics")
-        
-        # Data distribution insights
-        with st.expander("📊 Data Distribution Insights", expanded=False):
-            # Value length distribution for text
-            if df[column_name].dtype == 'object':
-                lengths = df[column_name].dropna().astype(str).str.len()
-                if len(lengths) > 0:
-                    st.write("**Text Length Statistics:**")
-                    col_a, col_b, col_c = st.columns(3)
-                    with col_a:
-                        st.metric("Min Length", f"{lengths.min()}")
-                    with col_b:
-                        st.metric("Avg Length", f"{lengths.mean():.1f}")
-                    with col_c:
-                        st.metric("Max Length", f"{lengths.max()}")
-                    
-                    # Show most common lengths
-                    length_counts = lengths.value_counts().head(5)
-                    if len(length_counts) > 0:
-                        st.write("**Most Common Text Lengths:**")
-                        for length, count in length_counts.items():
-                            percentage = (count / len(lengths)) * 100
-                            st.write(f"• {length} characters: {count:,} values ({percentage:.1f}%)")
+        # Basic statistics in a clean card-like layout
+        stats_container = st.container()
+        with stats_container:
+            # Key metrics in a clean row
+            metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
             
-            # Top values
-            st.write("**Most Frequent Values:**")
+            with metric_col1:
+                st.metric("📊 Total Rows", f"{len(df):,}")
+            with metric_col2:  
+                unique_count = df[column_name].nunique()
+                st.metric("🔑 Unique Values", f"{unique_count:,}")
+            with metric_col3:
+                null_count = df[column_name].isnull().sum()
+                null_pct = (null_count / len(df)) * 100
+                st.metric("🕳️ Missing", f"{null_pct:.1f}%")
+            with metric_col4:
+                duplicate_count = len(df) - unique_count
+                dup_pct = (duplicate_count / len(df)) * 100 if len(df) > 0 else 0
+                st.metric("🔄 Duplicates", f"{dup_pct:.1f}%")
+        
+        # Quality assessment with clear visual indicators
+        quality_container = st.container()
+        with quality_container:
+            # Calculate overall quality score
+            quality_score = 100
+            issues = []
+            
+            if null_pct > 10:
+                quality_score -= min(30, null_pct)
+                issues.append(f"High missing data ({null_pct:.1f}%)")
+            
+            if dup_pct > 50:
+                quality_score -= min(40, dup_pct - 50)
+                issues.append(f"High duplicates ({dup_pct:.1f}%)")
+            
+            # Display quality status
+            if quality_score >= 90:
+                st.success(f"✅ **Excellent data quality** ({quality_score:.0f}/100)")
+            elif quality_score >= 70:
+                st.info(f"ℹ️ **Good data quality** ({quality_score:.0f}/100)")
+            elif quality_score >= 50:
+                st.warning(f"⚠️ **Fair data quality** ({quality_score:.0f}/100) - {', '.join(issues)}")
+            else:
+                st.error(f"❌ **Poor data quality** ({quality_score:.0f}/100) - {', '.join(issues)}")
+            
+            # Special recognition for perfect key columns
+            if unique_count == len(df) and null_count == 0:
+                st.success("🏆 **Perfect Key Column** - All values are unique and present!")
+        
+        # Clean data preview section
+        with st.expander("� Sample Data Preview", expanded=False):
+            sample_data = df[column_name].dropna().head(10).tolist()
+            
+            if sample_data:
+                # Create a clean preview table
+                preview_data = []
+                for i, value in enumerate(sample_data, 1):
+                    preview_data.append({
+                        '#': i,
+                        'Value': str(value),
+                        'Length': len(str(value)),
+                        'Type': type(value).__name__
+                    })
+                
+                preview_df = pd.DataFrame(preview_data)
+                st.dataframe(preview_df, hide_index=True, use_container_width=True)
+                
+                # Quick stats on sample
+                if df[column_name].dtype == 'object':
+                    avg_length = preview_df['Length'].mean()
+                    st.info(f"📏 Average length in sample: {avg_length:.1f} characters")
+            else:
+                st.warning("⚠️ No non-null values found in this column")
+        
+        # Most frequent values in a clean format
+        with st.expander("🔝 Most Frequent Values", expanded=False):
             top_values = df[column_name].value_counts().head(10)
             if len(top_values) > 0:
+                freq_data = []
                 for value, count in top_values.items():
                     percentage = (count / len(df)) * 100
                     # Truncate long values for display
                     display_value = str(value)
-                    if len(display_value) > 50:
-                        display_value = display_value[:47] + "..."
-                    st.write(f"• `{display_value}`: {count:,} times ({percentage:.1f}%)")
+                    if len(display_value) > 40:
+                        display_value = display_value[:37] + "..."
+                    
+                    freq_data.append({
+                        'Value': display_value,
+                        'Count': f"{count:,}",
+                        'Percentage': f"{percentage:.1f}%"
+                    })
+                
+                freq_df = pd.DataFrame(freq_data)
+                st.dataframe(freq_df, hide_index=True, use_container_width=True)
             else:
                 st.info("No value frequency data available")
         
@@ -855,6 +824,191 @@ class ExcelComparator:
                 st.write("**Considerations:**")
                 for issue in issues:
                     st.write(f"• {issue}")
+    
+    def show_pattern_analysis(self, df: pd.DataFrame, column_name: str):
+        """Display pattern analysis for a column"""
+        if df[column_name].dtype == 'object':
+            patterns_found = []
+            
+            # Email pattern
+            email_pattern = df[column_name].str.contains(r'@\w+\.\w+', na=False, regex=True).sum()
+            if email_pattern > 0:
+                patterns_found.append({
+                    'Pattern': '📧 Email addresses',
+                    'Count': email_pattern,
+                    'Percentage': f"{(email_pattern/len(df)*100):.1f}%"
+                })
+            
+            # Phone pattern
+            phone_pattern = df[column_name].str.contains(r'\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b', na=False, regex=True).sum()
+            if phone_pattern > 0:
+                patterns_found.append({
+                    'Pattern': '📞 Phone numbers',
+                    'Count': phone_pattern,
+                    'Percentage': f"{(phone_pattern/len(df)*100):.1f}%"
+                })
+            
+            # Date pattern
+            date_pattern = df[column_name].str.contains(r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b', na=False, regex=True).sum()
+            if date_pattern > 0:
+                patterns_found.append({
+                    'Pattern': '📅 Date-like values',
+                    'Count': date_pattern,
+                    'Percentage': f"{(date_pattern/len(df)*100):.1f}%"
+                })
+            
+            # ID pattern (alphanumeric)
+            id_pattern = df[column_name].str.contains(r'^[A-Za-z0-9]+$', na=False, regex=True).sum()
+            if id_pattern > 0:
+                patterns_found.append({
+                    'Pattern': '🆔 ID-like values',
+                    'Count': id_pattern,
+                    'Percentage': f"{(id_pattern/len(df)*100):.1f}%"
+                })
+            
+            # Number pattern
+            number_pattern = df[column_name].str.contains(r'^\d+$', na=False, regex=True).sum()
+            if number_pattern > 0:
+                patterns_found.append({
+                    'Pattern': '🔢 Numeric strings',
+                    'Count': number_pattern,
+                    'Percentage': f"{(number_pattern/len(df)*100):.1f}%"
+                })
+            
+            if patterns_found:
+                pattern_df = pd.DataFrame(patterns_found)
+                st.dataframe(pattern_df, hide_index=True, use_container_width=True)
+            else:
+                st.info("No common patterns detected")
+        else:
+            # Numeric column analysis
+            try:
+                col_stats = df[column_name].describe()
+                stats_data = [
+                    {'Statistic': 'Mean', 'Value': f"{col_stats['mean']:.2f}"},
+                    {'Statistic': 'Median', 'Value': f"{col_stats['50%']:.2f}"},
+                    {'Statistic': 'Min', 'Value': f"{col_stats['min']:.2f}"},
+                    {'Statistic': 'Max', 'Value': f"{col_stats['max']:.2f}"},
+                    {'Statistic': 'Std Dev', 'Value': f"{col_stats['std']:.2f}"}
+                ]
+                stats_df = pd.DataFrame(stats_data)
+                st.dataframe(stats_df, hide_index=True, use_container_width=True)
+            except:
+                st.warning("Unable to calculate numeric statistics")
+    
+    def show_compatibility_analysis(self, df_a: pd.DataFrame, col_a: str, df_b: pd.DataFrame, col_b: str):
+        """Analyze compatibility between two columns"""
+        
+        # Data type compatibility
+        type_a = df_a[col_a].dtype
+        type_b = df_b[col_b].dtype
+        
+        col_comp1, col_comp2 = st.columns(2)
+        
+        with col_comp1:
+            st.metric("Sheet A Data Type", str(type_a))
+        with col_comp2:
+            st.metric("Sheet B Data Type", str(type_b))
+        
+        # Compatibility assessment
+        if type_a == type_b:
+            st.success("✅ **Data types match perfectly**")
+        elif (type_a == 'object' and type_b == 'object'):
+            st.success("✅ **Both are text columns - good for fuzzy matching**")
+        elif str(type_a).startswith(('int', 'float')) and str(type_b).startswith(('int', 'float')):
+            st.success("✅ **Both are numeric - good for exact matching**")
+        else:
+            st.warning("⚠️ **Different data types - may need preprocessing**")
+        
+        # Sample overlap analysis
+        if df_a[col_a].dtype == 'object' and df_b[col_b].dtype == 'object':
+            sample_a = set(df_a[col_a].dropna().astype(str).str.lower()[:500])
+            sample_b = set(df_b[col_b].dropna().astype(str).str.lower()[:500])
+            
+            overlap = len(sample_a & sample_b)
+            total_unique = len(sample_a | sample_b)
+            overlap_pct = (overlap / total_unique * 100) if total_unique > 0 else 0
+            
+            st.metric("Sample Overlap", f"{overlap_pct:.1f}%", help=f"{overlap} common values in sample")
+            
+            if overlap_pct >= 30:
+                st.success("🎯 **High overlap detected - expect good matches**")
+            elif overlap_pct >= 10:
+                st.info("ℹ️ **Moderate overlap - fuzzy matching recommended**")
+            else:
+                st.warning("⚠️ **Low overlap - review data or adjust threshold**")
+    
+    def show_matching_recommendations(self, df_a: pd.DataFrame, col_a: str, df_b: pd.DataFrame, col_b: str, threshold: int):
+        """Provide smart matching recommendations"""
+        
+        recommendations = []
+        
+        # Data quality checks
+        null_a_pct = (df_a[col_a].isnull().sum() / len(df_a)) * 100
+        null_b_pct = (df_b[col_b].isnull().sum() / len(df_b)) * 100
+        
+        if null_a_pct > 20 or null_b_pct > 20:
+            recommendations.append({
+                'Type': '🧹 Data Cleaning',
+                'Recommendation': 'High missing data detected. Consider cleaning data before matching.',
+                'Priority': 'High'
+            })
+        
+        # Threshold recommendations
+        unique_a = df_a[col_a].nunique()
+        unique_b = df_b[col_b].nunique()
+        total_rows = min(len(df_a), len(df_b))
+        
+        if unique_a == len(df_a) and unique_b == len(df_b):
+            if threshold < 90:
+                recommendations.append({
+                    'Type': '🎯 Threshold',
+                    'Recommendation': 'Perfect unique keys detected. Consider raising threshold to 90%+ for better precision.',
+                    'Priority': 'Medium'
+                })
+        elif (unique_a / len(df_a)) < 0.8 or (unique_b / len(df_b)) < 0.8:
+            if threshold > 70:
+                recommendations.append({
+                    'Type': '🎯 Threshold',
+                    'Recommendation': 'High duplicate rate detected. Consider lowering threshold to 60-70% for better recall.',
+                    'Priority': 'Medium'
+                })
+        
+        # Matching strategy recommendations
+        if df_a[col_a].dtype == 'object' and df_b[col_b].dtype == 'object':
+            # Check for common patterns
+            avg_len_a = df_a[col_a].dropna().astype(str).str.len().mean()
+            avg_len_b = df_b[col_b].dropna().astype(str).str.len().mean()
+            
+            if abs(avg_len_a - avg_len_b) > 10:
+                recommendations.append({
+                    'Type': '⚙️ Strategy',
+                    'Recommendation': 'Significant length difference detected. Consider multi-column matching for better accuracy.',
+                    'Priority': 'Low'
+                })
+            
+            if threshold < 80:
+                recommendations.append({
+                    'Type': '✨ Performance',
+                    'Recommendation': 'Text matching with fuzzy logic. Higher thresholds (80%+) typically work well for names and IDs.',
+                    'Priority': 'Low'
+                })
+        
+        # Display recommendations
+        if recommendations:
+            for rec in recommendations:
+                priority_color = {
+                    'High': 'error',
+                    'Medium': 'warning', 
+                    'Low': 'info'
+                }
+                
+                getattr(st, priority_color[rec['Priority']])(
+                    f"**{rec['Type']}** ({rec['Priority']} Priority): {rec['Recommendation']}"
+                )
+        else:
+            st.success("🎉 **Great! Your data looks well-prepared for matching.**")
+            st.info("💡 Tip: You can always adjust the threshold after seeing initial results.")
     
     def add_result_filters(self, results_df: pd.DataFrame, result_type: str) -> pd.DataFrame:
         """Add smart filtering and search to results"""
@@ -1219,7 +1373,14 @@ class ExcelComparator:
                 if composite_a == b_data['composite_key']:
                     # Perfect multi-field match
                     result_row = row_a.to_dict()
-                    result_row.update(b_data['data'])
+                    
+                    # Add extracted data from Sheet B with clear column naming
+                    if b_data['data']:
+                        for col_name, col_value in b_data['data'].items():
+                            # Prefix columns from Sheet B to avoid conflicts
+                            prefixed_col_name = f"SheetB_{col_name}" if col_name in result_row else col_name
+                            result_row[prefixed_col_name] = col_value
+                    
                     result_row['match_type'] = 'Multi-Field Exact'
                     result_row['similarity_score'] = 100.0
                     result_row['matched_keys'] = dict(zip(key_cols_b, b_data['original_values']))
@@ -1260,7 +1421,14 @@ class ExcelComparator:
             # Categorize based on weighted score
             if best_match and best_score >= threshold:
                 result_row = row_a.to_dict()
-                result_row.update(best_match['data'])
+                
+                # Add extracted data from Sheet B with clear column naming
+                if best_match['data']:
+                    for col_name, col_value in best_match['data'].items():
+                        # Prefix columns from Sheet B to avoid conflicts
+                        prefixed_col_name = f"SheetB_{col_name}" if col_name in result_row else col_name
+                        result_row[prefixed_col_name] = col_value
+                
                 result_row['matched_keys'] = dict(zip(key_cols_b, best_match['original_values']))
                 result_row['field_breakdown'] = best_breakdown
                 result_row['similarity_score'] = best_score
@@ -1304,10 +1472,196 @@ class ExcelComparator:
         
         time.sleep(1.5)
         return results
+    
+    def perform_batch_comparison(self, uploaded_file, reference_sheet: str, target_sheets: List[str],
+                                key_col_ref: str, key_col_targets: str, 
+                                cols_to_extract: List[str], threshold: int,
+                                ignore_case: bool = True) -> Dict:
+        """Perform batch comparison of reference sheet against multiple target sheets"""
+        
+        batch_results = {}
+        
+        # Load reference sheet
+        df_ref = self.read_sheet(uploaded_file, reference_sheet)
+        if df_ref is None:
+            st.error(f"Failed to load reference sheet: {reference_sheet}")
+            return {}
+        
+        st.subheader("🔄 Batch Processing Progress")
+        
+        # Create overall progress tracking
+        total_comparisons = len(target_sheets)
+        overall_progress = st.progress(0, text=f"Starting batch comparison of {total_comparisons} sheets...")
+        
+        # Results summary container
+        results_summary = st.container()
+        
+        # Process each target sheet
+        for i, target_sheet in enumerate(target_sheets):
+            # Update overall progress
+            progress = i / total_comparisons
+            overall_progress.progress(progress, text=f"Processing {target_sheet} ({i+1}/{total_comparisons})")
+            
+            st.write(f"### 📊 Comparing: {reference_sheet} vs {target_sheet}")
+            
+            # Load target sheet
+            df_target = self.read_sheet(uploaded_file, target_sheet)
+            if df_target is None:
+                st.warning(f"⚠️ Skipping {target_sheet} - could not load sheet")
+                batch_results[target_sheet] = {"error": "Could not load sheet"}
+                continue
+            
+            # Show comparison metrics
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Reference Rows", f"{len(df_ref):,}")
+            with col2:
+                st.metric("Target Rows", f"{len(df_target):,}")
+            with col3:
+                overlap_estimate = min(len(df_ref), len(df_target))
+                st.metric("Est. Overlap", f"{overlap_estimate:,}")
+            
+            # Perform individual comparison
+            try:
+                comparison_results = self.perform_comparison(
+                    df_ref, df_target, 
+                    key_col_ref, key_col_targets,
+                    cols_to_extract, threshold, ignore_case
+                )
+                
+                # Store results with metadata
+                batch_results[target_sheet] = {
+                    "results": comparison_results,
+                    "reference_sheet": reference_sheet,
+                    "target_sheet": target_sheet,
+                    "reference_rows": len(df_ref),
+                    "target_rows": len(df_target),
+                    "match_count": len(comparison_results.get('matched', [])),
+                    "suggested_count": len(comparison_results.get('suggested', [])),
+                    "unmatched_count": len(comparison_results.get('unmatched', [])),
+                    "match_rate": (len(comparison_results.get('matched', [])) / len(df_ref) * 100) if len(df_ref) > 0 else 0
+                }
+                
+                # Show quick summary for this comparison
+                match_count = len(comparison_results.get('matched', []))
+                total_ref = len(df_ref)
+                match_rate = (match_count / total_ref * 100) if total_ref > 0 else 0
+                
+                if match_rate >= 80:
+                    st.success(f"✅ High match rate: {match_rate:.1f}% ({match_count:,}/{total_ref:,})")
+                elif match_rate >= 50:
+                    st.warning(f"🟡 Medium match rate: {match_rate:.1f}% ({match_count:,}/{total_ref:,})")
+                else:
+                    st.error(f"🔴 Low match rate: {match_rate:.1f}% ({match_count:,}/{total_ref:,})")
+                
+            except Exception as e:
+                st.error(f"❌ Error comparing with {target_sheet}: {str(e)}")
+                batch_results[target_sheet] = {"error": str(e)}
+            
+            st.divider()
+        
+        # Final progress update
+        overall_progress.progress(1.0, text="✅ Batch comparison completed!")
+        
+        # Show batch summary
+        with results_summary:
+            self.show_batch_summary(batch_results)
+        
+        return batch_results
+    
+    def show_batch_summary(self, batch_results: Dict):
+        """Display comprehensive batch processing summary"""
+        
+        st.subheader("📊 Batch Processing Summary")
+        
+        # Calculate overall statistics
+        total_comparisons = len([k for k, v in batch_results.items() if "results" in v])
+        successful_comparisons = len([k for k, v in batch_results.items() if "results" in v and "error" not in v])
+        failed_comparisons = len(batch_results) - successful_comparisons
+        
+        # Overall metrics
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total Comparisons", f"{len(batch_results)}")
+        with col2:
+            st.metric("✅ Successful", f"{successful_comparisons}")
+        with col3:
+            st.metric("❌ Failed", f"{failed_comparisons}")
+        with col4:
+            success_rate = (successful_comparisons / len(batch_results) * 100) if batch_results else 0
+            st.metric("Success Rate", f"{success_rate:.1f}%")
+        
+        # Detailed results table
+        if successful_comparisons > 0:
+            summary_data = []
+            for sheet_name, result_data in batch_results.items():
+                if "results" in result_data and "error" not in result_data:
+                    summary_data.append({
+                        'Target Sheet': sheet_name,
+                        'Match Rate': f"{result_data['match_rate']:.1f}%",
+                        'Matched': f"{result_data['match_count']:,}",
+                        'Suggested': f"{result_data['suggested_count']:,}",
+                        'Unmatched': f"{result_data['unmatched_count']:,}",
+                        'Target Rows': f"{result_data['target_rows']:,}",
+                        'Status': '🟢 High' if result_data['match_rate'] >= 80 else '🟡 Medium' if result_data['match_rate'] >= 50 else '🔴 Low'
+                    })
+            
+            if summary_data:
+                summary_df = pd.DataFrame(summary_data)
+                st.dataframe(summary_df, hide_index=True, use_container_width=True)
+                
+                # Best and worst performers
+                if len(summary_data) > 1:
+                    match_rates = [float(row['Match Rate'].replace('%', '')) for row in summary_data]
+                    best_idx = match_rates.index(max(match_rates))
+                    worst_idx = match_rates.index(min(match_rates))
+                    
+                    col_best, col_worst = st.columns(2)
+                    with col_best:
+                        st.success(f"🏆 Best Match: **{summary_data[best_idx]['Target Sheet']}** ({summary_data[best_idx]['Match Rate']})")
+                    with col_worst:
+                        st.warning(f"⚠️ Needs Review: **{summary_data[worst_idx]['Target Sheet']}** ({summary_data[worst_idx]['Match Rate']})")
+        
+        # Failed comparisons
+        if failed_comparisons > 0:
+            st.subheader("❌ Failed Comparisons")
+            failed_data = []
+            for sheet_name, result_data in batch_results.items():
+                if "error" in result_data:
+                    failed_data.append({
+                        'Sheet': sheet_name,
+                        'Error': result_data['error']
+                    })
+            
+            if failed_data:
+                failed_df = pd.DataFrame(failed_data)
+                st.dataframe(failed_df, hide_index=True, use_container_width=True)
 
 def main():
     st.title("📊 Excel Comparison Tool")
-    st.markdown("Upload two Excel files to compare and match data between them")
+    st.markdown("**Compare data between Excel files or sheets with advanced matching algorithms**")
+    
+    # Add info about new capabilities
+    with st.expander("ℹ️ What can you compare?", expanded=False):
+        st.markdown("""
+        **🔄 Two Different Files:**
+        - Compare data between separate Excel files
+        - Perfect for comparing data from different sources
+        - Ideal for vendor comparisons, data validation, etc.
+        
+        **📋 Same File (Different Sheets):**
+        - Compare sheets within the same Excel file
+        - Great for temporal comparisons (Jan vs Feb, Before vs After)
+        - Perfect for budget vs actual, plan vs execution analysis
+        - Useful for version control within workbooks
+        
+        **✨ Advanced Features:**
+        - Fuzzy matching with customizable thresholds
+        - Multi-column comparison with weighted scoring
+        - Real-time progress tracking with ETA
+        - Professional export with executive summaries
+        - Smart filtering and search capabilities
+        """)
     
     # Initialize comparator
     if 'comparator' not in st.session_state:
@@ -1319,19 +1673,116 @@ def main():
     with st.sidebar:
         st.header("📁 File Upload")
         
-        # File A upload
-        uploaded_file_a = st.file_uploader(
-            "Choose Sheet A (Excel file)", 
-            type=['xlsx', 'xls'],
-            key="file_a"
+        # Comparison mode selection
+        comparison_mode = st.radio(
+            "🔄 Comparison Mode:",
+            options=["Two Different Files", "Same File (Different Sheets)", "Multi-Sheet Batch Processing"],
+            index=0,
+            help="Choose comparison type: separate files, two sheets, or one reference sheet vs multiple sheets"
         )
         
-        # File B upload
-        uploaded_file_b = st.file_uploader(
-            "Choose Sheet B (Excel file)", 
-            type=['xlsx', 'xls'],
-            key="file_b"
-        )
+        st.divider()
+        
+        if comparison_mode == "Two Different Files":
+            # Original two-file upload mode
+            uploaded_file_a = st.file_uploader(
+                "Choose Sheet A (Excel file)", 
+                type=['xlsx', 'xls'],
+                key="file_a"
+            )
+            
+            uploaded_file_b = st.file_uploader(
+                "Choose Sheet B (Excel file)", 
+                type=['xlsx', 'xls'],
+                key="file_b"
+            )
+            
+            # Set both files as the same for processing
+            same_file_mode = False
+            batch_mode = False
+            
+        elif comparison_mode == "Same File (Different Sheets)":
+            # Same file, different sheets mode
+            st.info("📝 Upload one Excel file to compare different sheets within it")
+            
+            # Show practical examples
+            with st.expander("💡 Common Use Cases", expanded=False):
+                st.markdown("""
+                **📅 Temporal Comparisons:**
+                - January vs February sales data
+                - Q1 vs Q2 performance metrics
+                - Before vs After implementation results
+                
+                **📈 Business Analysis:**
+                - Budget vs Actual spending
+                - Plan vs Execution tracking
+                - Target vs Achievement comparison
+                
+                **📊 Data Validation:**
+                - Original vs Cleaned datasets
+                - Raw vs Processed data
+                - Version 1 vs Version 2 of reports
+                
+                **🔍 Quality Control:**
+                - Compare different data processing methods
+                - Validate data transformation results
+                - Check consistency across time periods
+                """)
+            
+            uploaded_single_file = st.file_uploader(
+                "Choose Excel file with multiple sheets", 
+                type=['xlsx', 'xls'],
+                key="single_file"
+            )
+            
+            # Use the same file for both A and B
+            uploaded_file_a = uploaded_single_file
+            uploaded_file_b = uploaded_single_file
+            same_file_mode = True
+            batch_mode = False
+            
+        elif comparison_mode == "Multi-Sheet Batch Processing":
+            # Batch processing mode
+            st.info("🔄 Compare one reference sheet against multiple sheets in batch")
+            
+            # Show batch processing examples
+            with st.expander("💡 Batch Processing Use Cases", expanded=False):
+                st.markdown("""
+                **📊 Reference vs Multiple:**
+                - Master data vs regional data sheets
+                - Template vs multiple completed forms
+                - Standard vs customized versions
+                
+                **📈 Performance Analysis:**
+                - Benchmark vs multiple time periods
+                - Target sheet vs monthly actuals
+                - Master list vs department sheets
+                
+                **🔍 Quality Assurance:**
+                - Reference data vs multiple sources
+                - Gold standard vs test results
+                - Original vs multiple processed versions
+                
+                **📋 Compliance Checking:**
+                - Policy template vs department implementations
+                - Standard format vs various submissions
+                - Approved list vs multiple inventories
+                """)
+            
+            uploaded_batch_file = st.file_uploader(
+                "Choose Excel file for batch processing", 
+                type=['xlsx', 'xls'],
+                key="batch_file"
+            )
+            
+            # Set up for batch processing
+            uploaded_file_a = uploaded_batch_file  # Will be the reference sheet
+            uploaded_file_b = None  # Will be set dynamically for each comparison
+            same_file_mode = False
+            batch_mode = True
+            
+        else:
+            batch_mode = False
         
         st.divider()
         
@@ -1351,22 +1802,183 @@ def main():
             help="Normalize text for better matching"
         )
     
-    # Main content area
-    col1, col2 = st.columns(2)
-    
-    # Handle Sheet A
-    with col1:
-        st.subheader("📋 Sheet A")
-        if uploaded_file_a:
-            # Get sheet names
-            _, sheet_names_a = comparator.load_excel_file(uploaded_file_a, "Sheet A")
+    # Main content area - different layout for batch mode
+    if batch_mode and uploaded_file_a:
+        # Batch Processing Layout
+        st.header("🔄 Multi-Sheet Batch Processing")
+        
+        # Get all sheet names
+        _, all_sheet_names = comparator.load_excel_file(uploaded_file_a, "Batch File")
+        
+        if all_sheet_names and len(all_sheet_names) > 1:
+            st.success(f"📊 Found {len(all_sheet_names)} sheets: {', '.join(all_sheet_names)}")
             
-            if sheet_names_a:
-                selected_sheet_a = st.selectbox(
-                    "Select sheet from File A:",
-                    sheet_names_a,
-                    key="sheet_a"
+            # Reference sheet selection
+            col_ref, col_target = st.columns(2)
+            
+            with col_ref:
+                st.subheader("📋 Reference Sheet")
+                reference_sheet = st.selectbox(
+                    "Select reference sheet (will be compared against all others):",
+                    all_sheet_names,
+                    key="reference_sheet",
+                    help="This sheet will be used as the baseline for comparison"
                 )
+                
+                # Load and preview reference sheet
+                if reference_sheet:
+                    df_ref = comparator.read_sheet(uploaded_file_a, reference_sheet)
+                    if df_ref is not None:
+                        st.metric("📊 Rows", f"{len(df_ref):,}")
+                        st.metric("📋 Columns", f"{len(df_ref.columns):,}")
+                        
+                        with st.expander("👀 Reference Data Preview", expanded=False):
+                            st.dataframe(df_ref.head(5), use_container_width=True)
+            
+            with col_target:
+                st.subheader("🎯 Target Sheets")
+                # Filter out reference sheet from target options
+                target_options = [sheet for sheet in all_sheet_names if sheet != reference_sheet]
+                
+                if target_options:
+                    target_sheets = st.multiselect(
+                        "Select sheets to compare against reference:",
+                        target_options,
+                        default=target_options,  # Select all by default
+                        key="target_sheets",
+                        help="These sheets will be compared against the reference sheet"
+                    )
+                    
+                    if target_sheets:
+                        st.success(f"✅ Will compare reference sheet against {len(target_sheets)} target sheets")
+                        
+                        # Show target sheets summary
+                        target_summary = []
+                        for sheet in target_sheets[:3]:  # Show first 3 for preview
+                            df_target = comparator.read_sheet(uploaded_file_a, sheet)
+                            if df_target is not None:
+                                target_summary.append({
+                                    'Sheet': sheet,
+                                    'Rows': f"{len(df_target):,}",
+                                    'Columns': f"{len(df_target.columns):,}"
+                                })
+                        
+                        if target_summary:
+                            st.write("**Target Sheets Preview:**")
+                            summary_df = pd.DataFrame(target_summary)
+                            st.dataframe(summary_df, hide_index=True, use_container_width=True)
+                            
+                            if len(target_sheets) > 3:
+                                st.info(f"... and {len(target_sheets) - 3} more sheets")
+                    else:
+                        st.warning("⚠️ Please select at least one target sheet")
+                else:
+                    st.warning("⚠️ No other sheets available. Need at least 2 sheets for batch processing.")
+        else:
+            st.warning("⚠️ Please upload an Excel file with multiple sheets for batch processing")
+        
+        # Batch Processing Controls
+        if uploaded_file_a and 'reference_sheet' in locals() and 'target_sheets' in locals() and target_sheets:
+            st.divider()
+            st.header("🔄 Batch Processing Configuration")
+            
+            # Column configuration for batch processing
+            col_batch1, col_batch2 = st.columns(2)
+            
+            with col_batch1:
+                st.subheader("🔑 Key Column Configuration")
+                
+                # Load reference sheet for column selection
+                df_ref = comparator.read_sheet(uploaded_file_a, reference_sheet)
+                if df_ref is not None:
+                    key_col_ref = st.selectbox(
+                        f"Key column in reference sheet ({reference_sheet}):",
+                        df_ref.columns,
+                        key="batch_key_ref"
+                    )
+                    
+                    key_col_targets = st.selectbox(
+                        "Key column in target sheets:",
+                        df_ref.columns,  # Assume same structure
+                        key="batch_key_targets",
+                        help="This column should exist in all target sheets"
+                    )
+            
+            with col_batch2:
+                st.subheader("📊 Data Extraction")
+                
+                cols_to_extract_batch = st.multiselect(
+                    "Columns to extract from target sheets:",
+                    [col for col in df_ref.columns if col not in [key_col_ref]],
+                    key="batch_extract_cols",
+                    help="These columns will be merged from target sheets"
+                )
+            
+            # Batch processing button
+            st.divider()
+            
+            if st.button("🚀 Start Batch Processing", type="primary", use_container_width=True):
+                if key_col_ref and key_col_targets:
+                    st.info(f"🔄 Starting batch comparison of {reference_sheet} against {len(target_sheets)} target sheets...")
+                    
+                    # Show batch parameters
+                    with st.expander("📋 Batch Parameters", expanded=False):
+                        st.write(f"**📊 Batch Overview:**")
+                        st.write(f"- Reference sheet: {reference_sheet}")
+                        st.write(f"- Target sheets: {len(target_sheets)} sheets")
+                        st.write(f"- Key columns: {key_col_ref} ↔ {key_col_targets}")
+                        st.write(f"- Extracting: {', '.join(cols_to_extract_batch) if cols_to_extract_batch else 'Key columns only'}")
+                        st.write(f"- Similarity threshold: {threshold}%")
+                        st.write(f"- Case sensitive: {'No' if ignore_case else 'Yes'}")
+                    
+                    try:
+                        # Perform batch comparison
+                        batch_results = comparator.perform_batch_comparison(
+                            uploaded_file_a, reference_sheet, target_sheets,
+                            key_col_ref, key_col_targets,
+                            cols_to_extract_batch, threshold, ignore_case
+                        )
+                        
+                        # Store results for export
+                        st.session_state.batch_results = batch_results
+                        
+                        st.balloons()
+                        st.success("🎉 Batch processing completed! Results are displayed above.")
+                        
+                    except Exception as e:
+                        st.error(f"❌ Error during batch processing: {str(e)}")
+                        st.write("Please check your data and configuration.")
+                else:
+                    st.warning("⚠️ Please select key columns for batch processing.")
+    
+    else:
+        # Regular two-column layout for other modes
+        col1, col2 = st.columns(2)
+        
+        # Handle Sheet A
+        with col1:
+            if same_file_mode:
+                st.subheader("📋 First Sheet")
+            else:
+                st.subheader("📋 Sheet A")
+                
+            if uploaded_file_a:
+                # Get sheet names
+                _, sheet_names_a = comparator.load_excel_file(uploaded_file_a, "Sheet A")
+                
+                if sheet_names_a:
+                    if same_file_mode:
+                        label_a = "Select first sheet to compare:"
+                        if len(sheet_names_a) > 1:
+                            st.info(f"📊 Found {len(sheet_names_a)} sheets: {', '.join(sheet_names_a)}")
+                    else:
+                        label_a = "Select sheet from File A:"
+                    
+                    selected_sheet_a = st.selectbox(
+                        label_a,
+                        sheet_names_a,
+                        key="sheet_a"
+                    )
                 
                 # Load selected sheet
                 df_a = comparator.read_sheet(uploaded_file_a, selected_sheet_a)
@@ -1406,63 +2018,85 @@ def main():
                         
                         col_info_df = pd.DataFrame(col_info_display)
                         st.dataframe(col_info_df, hide_index=True, use_container_width=True)
-        else:
-            st.info("Please upload Sheet A")
-    
-    # Handle Sheet B
-    with col2:
-        st.subheader("📋 Sheet B")
-        if uploaded_file_b:
-            # Get sheet names
-            _, sheet_names_b = comparator.load_excel_file(uploaded_file_b, "Sheet B")
-            
-            if sheet_names_b:
-                selected_sheet_b = st.selectbox(
-                    "Select sheet from File B:",
-                    sheet_names_b,
-                    key="sheet_b"
-                )
-                
-                # Load selected sheet
-                df_b = comparator.read_sheet(uploaded_file_b, selected_sheet_b)
-                if df_b is not None:
-                    comparator.df_b = df_b
+            else:
+                if same_file_mode:
+                    st.info("Please upload an Excel file with multiple sheets")
+                else:
+                    st.info("Please upload Sheet A")
+        
+        # Handle Sheet B (only for non-batch modes)
+        if not batch_mode:  # Only show Sheet B section when not in batch mode
+            with col2:
+                if same_file_mode:
+                    st.subheader("📋 Second Sheet")
+                else:
+                    st.subheader("📋 Sheet B")
                     
-                    # Enhanced data preview with statistics
-                    col_metrics = st.columns(3)
-                    with col_metrics[0]:
-                        st.metric("📊 Rows", f"{len(df_b):,}")
-                    with col_metrics[1]:
-                        st.metric("📋 Columns", f"{len(df_b.columns):,}")
-                    with col_metrics[2]:
-                        total_cells = len(df_b) * len(df_b.columns)
-                        null_cells = df_b.isnull().sum().sum()
-                        null_pct = (null_cells / total_cells * 100) if total_cells > 0 else 0
-                        st.metric("🕳️ Missing Data", f"{null_pct:.1f}%")
+                if uploaded_file_b:
+                    # Get sheet names
+                    _, sheet_names_b = comparator.load_excel_file(uploaded_file_b, "Sheet B")
                     
-                    # Data preview with enhanced info
-                    with st.expander("👀 Data Preview & Column Types", expanded=True):
-                        st.dataframe(df_b.head(10), use_container_width=True)
+                    if sheet_names_b:
+                        if same_file_mode:
+                            label_b = "Select second sheet to compare:"
+                            # Filter out the already selected sheet A to avoid comparing sheet with itself
+                            available_sheets_b = [sheet for sheet in sheet_names_b if sheet != selected_sheet_a] if 'selected_sheet_a' in locals() else sheet_names_b
+                            if not available_sheets_b:
+                                st.warning("⚠️ Please select different sheets to compare")
+                                available_sheets_b = sheet_names_b
+                        else:
+                            label_b = "Select sheet from File B:"
+                            available_sheets_b = sheet_names_b
                         
-                        # Column info summary
-                        st.write("**📋 Column Information:**")
-                        col_info_display = []
-                        for col in df_b.columns:
-                            dtype = str(df_b[col].dtype)
-                            unique_count = df_b[col].nunique()
-                            null_count = df_b[col].isnull().sum()
-                            col_info_display.append({
-                                'Column': col,
-                                'Type': dtype,
-                                'Unique': f"{unique_count:,}",
-                                'Missing': f"{null_count:,}",
-                                'Sample': str(df_b[col].dropna().iloc[0]) if len(df_b[col].dropna()) > 0 else "N/A"
-                            })
+                        selected_sheet_b = st.selectbox(
+                            label_b,
+                            available_sheets_b,
+                            key="sheet_b"
+                        )
                         
-                        col_info_df = pd.DataFrame(col_info_display)
-                        st.dataframe(col_info_df, hide_index=True, use_container_width=True)
-        else:
-            st.info("Please upload Sheet B")
+                        # Load selected sheet
+                        df_b = comparator.read_sheet(uploaded_file_b, selected_sheet_b)
+                        if df_b is not None:
+                            comparator.df_b = df_b
+                        
+                        # Enhanced data preview with statistics
+                        col_metrics = st.columns(3)
+                        with col_metrics[0]:
+                            st.metric("📊 Rows", f"{len(df_b):,}")
+                        with col_metrics[1]:
+                            st.metric("📋 Columns", f"{len(df_b.columns):,}")
+                        with col_metrics[2]:
+                            total_cells = len(df_b) * len(df_b.columns)
+                            null_cells = df_b.isnull().sum().sum()
+                            null_pct = (null_cells / total_cells * 100) if total_cells > 0 else 0
+                            st.metric("🕳️ Missing Data", f"{null_pct:.1f}%")
+                    
+                        # Data preview with enhanced info
+                        with st.expander("👀 Data Preview & Column Types", expanded=True):
+                            st.dataframe(df_b.head(10), use_container_width=True)
+                            
+                            # Column info summary
+                            st.write("**📋 Column Information:**")
+                            col_info_display = []
+                            for col in df_b.columns:
+                                dtype = str(df_b[col].dtype)
+                                unique_count = df_b[col].nunique()
+                                null_count = df_b[col].isnull().sum()
+                                col_info_display.append({
+                                    'Column': col,
+                                    'Type': dtype,
+                                    'Unique': f"{unique_count:,}",
+                                    'Missing': f"{null_count:,}",
+                                    'Sample': str(df_b[col].dropna().iloc[0]) if len(df_b[col].dropna()) > 0 else "N/A"
+                                })
+                            
+                            col_info_df = pd.DataFrame(col_info_display)
+                            st.dataframe(col_info_df, hide_index=True, use_container_width=True)
+                else:
+                    if same_file_mode:
+                        st.info("Upload file above to see available sheets")
+                    else:
+                        st.info("Please upload Sheet B")
     
     # Column selection and comparison
     if comparator.df_a is not None and comparator.df_b is not None:
@@ -1569,16 +2203,96 @@ def main():
             
             # Enhanced column analysis for selected key columns
             if st.checkbox("📊 Show Advanced Key Column Analysis", help="Get detailed insights about data quality and matching potential"):
-                st.write("---")
-                col_analysis_1, col_analysis_2 = st.columns(2)
+                st.markdown("---")
                 
-                with col_analysis_1:
-                    st.write("### 📋 Sheet A Analysis")
-                    comparator.show_column_analysis(comparator.df_a, key_col_a, "Sheet A")
+                # Header section with overview
+                st.markdown("### 🔍 Key Column Analysis Dashboard")
+                st.markdown("*Analyze data quality and matching potential for your selected key columns*")
                 
-                with col_analysis_2:
-                    st.write("### 📋 Sheet B Analysis") 
-                    comparator.show_column_analysis(comparator.df_b, key_col_b, "Sheet B")
+                # Overview metrics in a nice layout
+                overview_col1, overview_col2, overview_col3, overview_col4 = st.columns(4)
+                
+                with overview_col1:
+                    unique_a = comparator.df_a[key_col_a].nunique()
+                    total_a = len(comparator.df_a)
+                    st.metric(
+                        label="📋 Sheet A Unique Values", 
+                        value=f"{unique_a:,}",
+                        delta=f"of {total_a:,} total"
+                    )
+                
+                with overview_col2:
+                    unique_b = comparator.df_b[key_col_b].nunique()
+                    total_b = len(comparator.df_b)
+                    st.metric(
+                        label="📋 Sheet B Unique Values", 
+                        value=f"{unique_b:,}",
+                        delta=f"of {total_b:,} total"
+                    )
+                
+                with overview_col3:
+                    # Calculate potential matches estimate
+                    common_sample = set(comparator.df_a[key_col_a].dropna().astype(str).str.lower()[:100]) & \
+                                   set(comparator.df_b[key_col_b].dropna().astype(str).str.lower()[:100])
+                    match_estimate = len(common_sample)
+                    st.metric(
+                        label="🎯 Potential Matches", 
+                        value=f"~{match_estimate}",
+                        delta="from sample",
+                        help="Estimated based on first 100 records"
+                    )
+                
+                with overview_col4:
+                    # Data quality score
+                    null_a = comparator.df_a[key_col_a].isnull().sum()
+                    null_b = comparator.df_b[key_col_b].isnull().sum()
+                    quality_score = max(0, 100 - ((null_a + null_b) / (total_a + total_b) * 100))
+                    st.metric(
+                        label="✨ Data Quality Score", 
+                        value=f"{quality_score:.0f}%",
+                        delta="Lower is better" if quality_score < 80 else "Good quality"
+                    )
+                
+                st.markdown("---")
+                
+                # Detailed analysis in organized tabs
+                tab1, tab2, tab3 = st.tabs(["📊 Detailed Analysis", "🔍 Pattern Detection", "💡 Recommendations"])
+                
+                with tab1:
+                    # Side-by-side detailed analysis
+                    col_analysis_1, col_analysis_2 = st.columns(2)
+                    
+                    with col_analysis_1:
+                        st.markdown("#### 📋 Sheet A Analysis")
+                        comparator.show_column_analysis(comparator.df_a, key_col_a, "Sheet A")
+                    
+                    with col_analysis_2:
+                        st.markdown("#### 📋 Sheet B Analysis") 
+                        comparator.show_column_analysis(comparator.df_b, key_col_b, "Sheet B")
+                
+                with tab2:
+                    # Pattern comparison between columns
+                    st.markdown("#### 🔍 Cross-Column Pattern Analysis")
+                    
+                    pattern_col1, pattern_col2 = st.columns(2)
+                    
+                    with pattern_col1:
+                        st.markdown("**📋 Sheet A Patterns:**")
+                        comparator.show_pattern_analysis(comparator.df_a, key_col_a)
+                    
+                    with pattern_col2:
+                        st.markdown("**📋 Sheet B Patterns:**")
+                        comparator.show_pattern_analysis(comparator.df_b, key_col_b)
+                    
+                    # Compatibility analysis
+                    st.markdown("---")
+                    st.markdown("#### 🤝 Column Compatibility Analysis")
+                    comparator.show_compatibility_analysis(comparator.df_a, key_col_a, comparator.df_b, key_col_b)
+                
+                with tab3:
+                    # Actionable recommendations
+                    st.markdown("#### 💡 Smart Recommendations")
+                    comparator.show_matching_recommendations(comparator.df_a, key_col_a, comparator.df_b, key_col_b, threshold)
         
         with col2:
             st.subheader("Columns to Extract")

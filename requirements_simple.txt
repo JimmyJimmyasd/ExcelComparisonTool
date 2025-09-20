@@ -1,0 +1,10 @@
+# Simplified requirements for better cross-platform compatibility
+streamlit>=1.39.0
+pandas>=2.0.0
+openpyxl>=3.1.0
+rapidfuzz>=3.0.0
+numpy>=1.24.0
+xlsxwriter>=3.2.0
+
+# Optional: Uncomment if you get Arrow serialization errors
+# pyarrow>=10.0.0

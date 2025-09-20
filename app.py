@@ -230,7 +230,7 @@ class ExcelComparator:
         )
         eta_text.empty()
         
-        # Brief pause to show completion state
+        # Brief pause to show completion state ......
         time.sleep(1.5)
         
         return results

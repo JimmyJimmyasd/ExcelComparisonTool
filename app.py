@@ -8,6 +8,8 @@ from typing import Tuple, List, Dict, Optional
 import time
 from datetime import datetime
 from utils import suggest_column_mappings, get_column_info
+from analysis.statistical_analysis import StatisticalAnalyzer
+from analysis.visualization import StatisticalVisualizer
 
 # Configure Streamlit page
 st.set_page_config(
@@ -2581,31 +2583,277 @@ class ExcelComparator:
                     baseline_df = pd.DataFrame(baseline_data)
                     st.dataframe(baseline_df, hide_index=True, use_container_width=True)
 
+def apply_theme(theme_name):
+    """Apply custom CSS theme to the Streamlit app"""
+    if theme_name == "Dark":
+        dark_theme = """
+        <style>
+        /* Main app background */
+        .stApp {
+            background-color: #0e1117 !important;
+            color: #fafafa !important;
+        }
+        
+        /* Sidebar styling */
+        .stSidebar {
+            background-color: #262730 !important;
+        }
+        .stSidebar .stSelectbox > div > div {
+            background-color: #262730 !important;
+            color: #fafafa !important;
+            border: 1px solid #4a4a4a !important;
+        }
+        
+        /* Input elements */
+        .stSelectbox > div > div {
+            background-color: #262730 !important;
+            color: #fafafa !important;
+            border: 1px solid #4a4a4a !important;
+        }
+        .stTextInput > div > div > input {
+            background-color: #262730 !important;
+            color: #fafafa !important;
+            border: 1px solid #4a4a4a !important;
+        }
+        .stNumberInput > div > div > input {
+            background-color: #262730 !important;
+            color: #fafafa !important;
+            border: 1px solid #4a4a4a !important;
+        }
+        
+        /* DataFrames */
+        .stDataFrame {
+            background-color: #1e1e1e !important;
+        }
+        .stDataFrame table {
+            background-color: #1e1e1e !important;
+            color: #fafafa !important;
+        }
+        .stDataFrame th {
+            background-color: #262730 !important;
+            color: #fafafa !important;
+            border: 1px solid #4a4a4a !important;
+        }
+        .stDataFrame td {
+            background-color: #1e1e1e !important;
+            color: #fafafa !important;
+            border: 1px solid #4a4a4a !important;
+        }
+        
+        /* Expander */
+        .stExpander {
+            background-color: #1e1e1e !important;
+            border: 1px solid #4a4a4a !important;
+        }
+        .stExpander > div > div > div {
+            background-color: #1e1e1e !important;
+            color: #fafafa !important;
+        }
+        
+        /* Tabs */
+        .stTabs [data-baseweb="tab-list"] {
+            background-color: #262730 !important;
+            border-bottom: 1px solid #4a4a4a !important;
+        }
+        .stTabs [data-baseweb="tab"] {
+            background-color: #262730 !important;
+            color: #fafafa !important;
+            border: 1px solid #4a4a4a !important;
+            margin-right: 2px !important;
+        }
+        .stTabs [aria-selected="true"] {
+            background-color: #0e1117 !important;
+            color: #00d4ff !important;
+            border-bottom: 2px solid #00d4ff !important;
+        }
+        
+        /* Metrics */
+        .stMetric {
+            background-color: #262730 !important;
+            padding: 15px !important;
+            border-radius: 8px !important;
+            border: 1px solid #4a4a4a !important;
+        }
+        .stMetric [data-testid="metric-container"] {
+            background-color: #262730 !important;
+            border: 1px solid #4a4a4a !important;
+            padding: 10px !important;
+            border-radius: 8px !important;
+        }
+        .stMetric label {
+            color: #a0a0a0 !important;
+        }
+        .stMetric [data-testid="metric-container"] > div {
+            color: #fafafa !important;
+        }
+        
+        /* Alerts and info boxes */
+        .stAlert {
+            background-color: #262730 !important;
+            color: #fafafa !important;
+            border: 1px solid #4a4a4a !important;
+        }
+        .stInfo {
+            background-color: #1a4d73 !important;
+            color: #fafafa !important;
+            border: 1px solid #2980b9 !important;
+        }
+        .stSuccess {
+            background-color: #1a5d1a !important;
+            color: #fafafa !important;
+            border: 1px solid #27ae60 !important;
+        }
+        .stWarning {
+            background-color: #735d1a !important;
+            color: #fafafa !important;
+            border: 1px solid #f39c12 !important;
+        }
+        .stError {
+            background-color: #731a1a !important;
+            color: #fafafa !important;
+            border: 1px solid #e74c3c !important;
+        }
+        
+        /* Text and markdown */
+        div[data-testid="stMarkdownContainer"] {
+            color: #fafafa !important;
+        }
+        .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4, .stMarkdown h5, .stMarkdown h6 {
+            color: #fafafa !important;
+        }
+        
+        /* Plotly charts */
+        .plotly-graph-div {
+            background-color: #1e1e1e !important;
+        }
+        .js-plotly-plot .plotly .modebar {
+            background-color: #262730 !important;
+        }
+        .js-plotly-plot .plotly .modebar .modebar-btn {
+            color: #fafafa !important;
+        }
+        
+        /* Progress bars */
+        .stProgress > div > div > div {
+            background-color: #00d4ff !important;
+        }
+        .stProgress > div > div {
+            background-color: #4a4a4a !important;
+        }
+        
+        /* File uploader */
+        .stFileUploader {
+            background-color: #262730 !important;
+            border: 1px solid #4a4a4a !important;
+            border-radius: 8px !important;
+        }
+        .stFileUploader > div {
+            background-color: #262730 !important;
+            color: #fafafa !important;
+        }
+        
+        /* Buttons */
+        .stButton > button {
+            background-color: #00d4ff !important;
+            color: #0e1117 !important;
+            border: none !important;
+            border-radius: 6px !important;
+        }
+        .stButton > button:hover {
+            background-color: #0098cc !important;
+            color: #0e1117 !important;
+        }
+        
+        /* Headers and subheaders */
+        .stHeader, .stSubheader {
+            color: #fafafa !important;
+        }
+        
+        /* Code blocks */
+        .stCode {
+            background-color: #262730 !important;
+            color: #fafafa !important;
+            border: 1px solid #4a4a4a !important;
+        }
+        </style>
+        """
+        st.markdown(dark_theme, unsafe_allow_html=True)
+    elif theme_name == "Light":
+        light_theme = """
+        <style>
+        .stApp {
+            background-color: #ffffff;
+            color: #262730;
+        }
+        .stSidebar {
+            background-color: #f0f2f6;
+        }
+        .stSelectbox > div > div {
+            background-color: #ffffff;
+            color: #262730;
+        }
+        .stDataFrame {
+            background-color: #ffffff;
+        }
+        .stExpander {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+        }
+        .stTabs [data-baseweb="tab-list"] {
+            background-color: #f0f2f6;
+        }
+        .stTabs [data-baseweb="tab"] {
+            background-color: #f0f2f6;
+            color: #262730;
+        }
+        .stTabs [aria-selected="true"] {
+            background-color: #ffffff;
+            color: #1f77b4;
+        }
+        .stMetric {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #e9ecef;
+        }
+        .stAlert {
+            background-color: #ffffff;
+            color: #262730;
+        }
+        div[data-testid="stMarkdownContainer"] {
+            color: #262730;
+        }
+        .plotly-graph-div {
+            background-color: #ffffff !important;
+        }
+        .js-plotly-plot .plotly .modebar {
+            background-color: #ffffff !important;
+        }
+        </style>
+        """
+        st.markdown(light_theme, unsafe_allow_html=True)
+
 def main():
-    st.title("📊 Excel Comparison Tool")
-    st.markdown("**Compare data between Excel files or sheets with advanced matching algorithms**")
+    # Theme toggle in sidebar
+    with st.sidebar:
+        st.markdown("### 🎨 Theme")
+        theme = st.selectbox(
+            "Select Theme:",
+            ["Light", "Dark"],
+            index=0 if st.session_state.get('theme', 'Light') == 'Light' else 1,
+            key="theme_selector"
+        )
+        
+        # Store theme in session state
+        st.session_state.theme = theme
+        
+        # Apply the selected theme
+        apply_theme(theme)
+        
+        st.markdown("---")
     
-    # Add info about new capabilities
-    with st.expander("ℹ️ What can you compare?", expanded=False):
-        st.markdown("""
-        **🔄 Two Different Files:**
-        - Compare data between separate Excel files
-        - Perfect for comparing data from different sources
-        - Ideal for vendor comparisons, data validation, etc.
-        
-        **📋 Same File (Different Sheets):**
-        - Compare sheets within the same Excel file
-        - Great for temporal comparisons (Jan vs Feb, Before vs After)
-        - Perfect for budget vs actual, plan vs execution analysis
-        - Useful for version control within workbooks
-        
-        **✨ Advanced Features:**
-        - Fuzzy matching with customizable thresholds
-        - Multi-column comparison with weighted scoring
-        - Real-time progress tracking with ETA
-        - Professional export with executive summaries
-        - Smart filtering and search capabilities
-        """)
+    st.title("📊 Excel Comparison & Business Intelligence Platform")
+    st.markdown("**Comprehensive data analysis, comparison, and business intelligence platform for Excel data**")
     
     # Initialize comparator
     if 'comparator' not in st.session_state:
@@ -2613,7 +2861,91 @@ def main():
     
     comparator = st.session_state.comparator
     
-    # Sidebar for file uploads and settings
+    # Main application tabs for better organization
+    main_tabs = st.tabs([
+        "🏠 Home & Setup",
+        "📊 Data Comparison", 
+        "📈 Business Intelligence",
+        "🔍 Data Analysis",
+        "📋 Reports & Export"
+    ])
+    
+    # HOME & SETUP TAB
+    with main_tabs[0]:
+        st.header("🏠 Welcome to Excel Comparison & BI Platform")
+        st.markdown("**Your comprehensive solution for Excel data analysis and business intelligence**")
+        
+        # Feature overview
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("🚀 Key Features")
+            st.markdown("""
+            **� Data Comparison:**
+            - Compare Excel files & sheets
+            - Fuzzy matching algorithms
+            - Multi-column analysis
+            - Real-time progress tracking
+            
+            **📈 Business Intelligence:**
+            - Financial ratio analysis (ROE, ROA, liquidity)
+            - Customer analytics & segmentation
+            - Performance KPIs & metrics
+            - Risk assessment & alerts
+            
+            **🔍 Advanced Analytics:**
+            - Statistical analysis
+            - Data quality assessment
+            - Trend analysis & forecasting
+            - Interactive visualizations
+            """)
+        
+        with col2:
+            st.subheader("📋 Quick Start Guide")
+            st.markdown("""
+            **Step 1: Upload Your Data**
+            - Use the sidebar to upload Excel files
+            - Choose comparison mode
+            - Select sheets to analyze
+            
+            **Step 2: Select Analysis Type**
+            - Data Comparison for file/sheet comparison
+            - Business Intelligence for business analysis
+            - Data Analysis for statistical insights
+            
+            **Step 3: Configure & Run**
+            - Set parameters and thresholds
+            - Run analysis and review results
+            - Export professional reports
+            """)
+        
+        # What can you compare section
+        with st.expander("ℹ️ Comparison Modes", expanded=False):
+            st.markdown("""
+            **🔄 Two Different Files:**
+            - Compare data between separate Excel files
+            - Perfect for vendor comparisons, data validation
+            
+            **📋 Same File (Different Sheets):**
+            - Compare sheets within the same workbook
+            - Temporal comparisons (Jan vs Feb, Before vs After)
+            - Budget vs actual analysis
+            
+            **🔄 Multi-Sheet Batch Processing:**
+            - Process multiple sheets against a reference
+            - Batch validation and quality checks
+            
+            **📈 Historical Comparison:**
+            - Time-series analysis across periods
+            - Trend identification and forecasting
+            """)
+    
+    # DATA COMPARISON TAB
+    with main_tabs[1]:
+        st.header("📊 Excel Data Comparison")
+        st.markdown("**Compare data between Excel files or sheets with advanced matching algorithms**")
+    
+    # Sidebar for file uploads and settings (always visible)
     with st.sidebar:
         st.header("📁 File Upload")
         
@@ -3461,26 +3793,37 @@ def main():
         
         with col_swap2:
             st.markdown("**🔄 Quick Sheet Swap**")
-            if st.button("🔄 Swap Sheets (A ↔ B)", type="secondary", use_container_width=True, help="Switch Sheet A and Sheet B positions - useful to reverse comparison direction without re-uploading"):
-                # Store current selections
-                current_sheet_a = st.session_state.get('sheet_a', None)
-                current_sheet_b = st.session_state.get('sheet_b', None)
+            
+            # Show different button based on swap status
+            sheets_swapped = st.session_state.get('sheets_swapped', False)
+            
+            if not sheets_swapped:
+                button_text = "🔄 Swap Sheets (A ↔ B)"
+                button_help = "Switch Sheet A and Sheet B positions - useful to reverse comparison direction"
+            else:
+                button_text = "↩️ Reset to Original"
+                button_help = "Return to original sheet assignment"
+            
+            if st.button(button_text, type="secondary", use_container_width=True, help=button_help):
+                # Store current sheet names for display purposes
+                current_sheet_a_name = st.session_state.get('sheet_a', 'Unknown')
+                current_sheet_b_name = st.session_state.get('sheet_b', 'Unknown')
                 
-                # Swap the dataframes
+                # Check current swap status
+                currently_swapped = st.session_state.get('sheets_swapped', False)
+                
+                # Swap the dataframes in the comparator object
                 temp_df = comparator.df_a.copy()
                 comparator.df_a = comparator.df_b.copy()
                 comparator.df_b = temp_df
                 
-                # Update session state to reflect the swap
-                if same_file_mode:
-                    # For same file mode, swap the sheet selections
-                    st.session_state.sheet_a = current_sheet_b
-                    st.session_state.sheet_b = current_sheet_a
-                else:
-                    # For different files mode, swap the sheet selections
-                    # The dataframes are already swapped above
-                    st.session_state.sheet_a = current_sheet_b
-                    st.session_state.sheet_b = current_sheet_a
+                # Toggle swap status
+                st.session_state.sheets_swapped = not currently_swapped
+                
+                # Store original assignments if this is the first swap
+                if not currently_swapped:
+                    st.session_state.original_sheet_a = current_sheet_a_name
+                    st.session_state.original_sheet_b = current_sheet_b_name
                 
                 # Clear any previous results and suggestions
                 if hasattr(st.session_state, 'column_suggestions'):
@@ -3490,7 +3833,17 @@ def main():
                 if hasattr(comparator, 'results'):
                     comparator.results = None
                 
-                st.success("✅ Sheets swapped successfully! Sheet A is now Sheet B and vice versa.")
+                if st.session_state.get('sheets_swapped', False):
+                    # After swap - show what's now in each position
+                    st.success(f"✅ Sheets swapped successfully!")
+                    st.info(f"🔄 **{current_sheet_b_name}** is now **Sheet A (Source)**")
+                    st.info(f"🔄 **{current_sheet_a_name}** is now **Sheet B (Target)**")
+                else:
+                    # Reset to original
+                    st.success(f"✅ Reset to original positions!")
+                    st.info(f"↩️ **{current_sheet_a_name}** is back to **Sheet A (Source)**")
+                    st.info(f"↩️ **{current_sheet_b_name}** is back to **Sheet B (Target)**")
+                
                 st.info("💡 Column suggestions and previous results have been cleared. Generate new suggestions if needed.")
                 
                 # Force a rerun to update the UI
@@ -3500,15 +3853,838 @@ def main():
         st.markdown("**📊 Current Sheet Assignment:**")
         assignment_col1, assignment_col2 = st.columns(2)
         
+        # Determine current sheet names based on swap status
+        sheets_swapped = st.session_state.get('sheets_swapped', False)
+        original_sheet_a = st.session_state.get('sheet_a', 'Unknown')
+        original_sheet_b = st.session_state.get('sheet_b', 'Unknown')
+        
+        if sheets_swapped:
+            # If swapped, show what's currently in each position
+            display_sheet_a = f"{original_sheet_b}"
+            display_sheet_b = f"{original_sheet_a}" 
+            swap_indicator = " 🔄 SWAPPED"
+            status_a = f"(Originally from {original_sheet_b})"
+            status_b = f"(Originally from {original_sheet_a})"
+        else:
+            # Normal assignment
+            display_sheet_a = original_sheet_a
+            display_sheet_b = original_sheet_b
+            swap_indicator = ""
+            status_a = "(Original position)"
+            status_b = "(Original position)"
+        
         with assignment_col1:
-            current_sheet_a_name = st.session_state.get('sheet_a', 'Unknown')
-            st.success(f"📋 **Sheet A (Source)**: {current_sheet_a_name}")
+            st.success(f"📋 **Sheet A (Source)**: {display_sheet_a}{swap_indicator}")
             st.caption(f"📊 {len(comparator.df_a):,} rows × {len(comparator.df_a.columns):,} columns")
+            if sheets_swapped:
+                st.caption(f"🔄 {status_a}")
             
         with assignment_col2:
-            current_sheet_b_name = st.session_state.get('sheet_b', 'Unknown') 
-            st.info(f"📋 **Sheet B (Target)**: {current_sheet_b_name}")
+            st.info(f"📋 **Sheet B (Target)**: {display_sheet_b}{swap_indicator}")
             st.caption(f"📊 {len(comparator.df_b):,} rows × {len(comparator.df_b.columns):,} columns")
+            if sheets_swapped:
+                st.caption(f"🔄 {status_b}")
+
+    # Statistical Analysis Dashboard
+    if comparator.df_a is not None and comparator.df_b is not None:
+        st.divider()
+        st.header("📊 Statistical Analysis Dashboard")
+        
+        # Initialize analyzers
+        if 'statistical_analyzer' not in st.session_state:
+            st.session_state.statistical_analyzer = StatisticalAnalyzer()
+        if 'statistical_visualizer' not in st.session_state:
+            st.session_state.statistical_visualizer = StatisticalVisualizer()
+        
+        analyzer = st.session_state.statistical_analyzer
+        visualizer = st.session_state.statistical_visualizer
+        
+        # Analysis options
+        analysis_col1, analysis_col2 = st.columns(2)
+        
+        with analysis_col1:
+            analysis_scope = st.radio(
+                "📋 Analysis Scope:",
+                ["Both Sheets", "Sheet A Only", "Sheet B Only", "Comparative Analysis"],
+                index=0,
+                help="Choose which data to analyze statistically"
+            )
+        
+        with analysis_col2:
+            show_advanced = st.checkbox(
+                "🔬 Advanced Statistics",
+                value=False,
+                help="Include advanced statistical measures like skewness, kurtosis, etc."
+            )
+        
+        # Analysis tabs
+        if analysis_scope in ["Both Sheets", "Sheet A Only", "Sheet B Only"]:
+            analysis_tabs = []
+            
+            if analysis_scope in ["Both Sheets", "Sheet A Only"]:
+                analysis_tabs.append("📋 Sheet A Analysis")
+            if analysis_scope in ["Both Sheets", "Sheet B Only"]:
+                analysis_tabs.append("📋 Sheet B Analysis")
+            
+            tabs = st.tabs(analysis_tabs)
+            
+            tab_index = 0
+            
+            # Sheet A Analysis
+            if analysis_scope in ["Both Sheets", "Sheet A Only"]:
+                with tabs[tab_index]:
+                    st.subheader("📊 Sheet A Statistical Analysis")
+                    
+                    # Get current sheet name
+                    current_sheet_a_name = st.session_state.get('sheet_a', 'Sheet A')
+                    if st.session_state.get('sheets_swapped', False):
+                        display_name = f"{st.session_state.get('sheet_b', 'Unknown')} (currently Sheet A)"
+                    else:
+                        display_name = current_sheet_a_name
+                    
+                    # Perform analysis
+                    analysis_a = analyzer.analyze_dataframe(comparator.df_a, display_name)
+                    
+                    # Create summary metrics
+                    summary_cards = visualizer.create_summary_metrics_cards(
+                        analysis_a['basic_info'], 
+                        analysis_a['missing_data_analysis']['_summary']
+                    )
+                    
+                    # Display summary cards
+                    card_cols = st.columns(len(summary_cards))
+                    for i, card in enumerate(summary_cards):
+                        with card_cols[i]:
+                            st.metric(
+                                label=f"{card['icon']} {card['title']}", 
+                                value=card['value']
+                            )
+                    
+                    # Analysis sub-tabs
+                    analysis_subtabs = st.tabs([
+                        "📈 Descriptive Stats", 
+                        "🕳️ Missing Data", 
+                        "📊 Distributions", 
+                        "🔗 Correlations",
+                        "📋 Data Types"
+                    ])
+                    
+                    with analysis_subtabs[0]:  # Descriptive Stats
+                        st.subheader("📈 Descriptive Statistics")
+                        
+                        if 'message' not in analysis_a['descriptive_stats']:
+                            # Show descriptive statistics table
+                            desc_df = pd.DataFrame(analysis_a['descriptive_stats']).T
+                            
+                            if show_advanced:
+                                columns_to_show = ['count', 'mean', 'median', 'std_dev', 'min', 'max', 
+                                                 'q1', 'q3', 'skewness', 'kurtosis', 'coefficient_of_variation']
+                            else:
+                                columns_to_show = ['count', 'mean', 'median', 'std_dev', 'min', 'max']
+                            
+                            # Filter available columns
+                            available_columns = [col for col in columns_to_show if col in desc_df.columns]
+                            
+                            if available_columns:
+                                st.dataframe(
+                                    desc_df[available_columns].round(3), 
+                                    use_container_width=True
+                                )
+                                
+                                # Show visualization
+                                fig_desc = visualizer.create_descriptive_stats_chart(
+                                    analysis_a['descriptive_stats'], 
+                                    f"Descriptive Statistics - {display_name}"
+                                )
+                                st.plotly_chart(fig_desc, use_container_width=True, key="desc_stats_a")
+                        else:
+                            st.info(analysis_a['descriptive_stats']['message'])
+                    
+                    with analysis_subtabs[1]:  # Missing Data
+                        st.subheader("🕳️ Missing Data Analysis")
+                        
+                        # Missing data summary chart
+                        fig_missing = visualizer.create_missing_data_summary_chart(
+                            analysis_a['missing_data_analysis']
+                        )
+                        st.plotly_chart(fig_missing, use_container_width=True, key="missing_summary_a")
+                        
+                        # Missing data heatmap
+                        if len(comparator.df_a) <= 1000:  # Only show heatmap for smaller datasets
+                            fig_heatmap = visualizer.create_missing_data_heatmap(
+                                comparator.df_a, f"Missing Data Pattern - {display_name}"
+                            )
+                            st.plotly_chart(fig_heatmap, use_container_width=True, key="missing_heatmap_a")
+                        else:
+                            st.info("💡 Missing data heatmap not shown for large datasets (>1000 rows) to maintain performance")
+                    
+                    with analysis_subtabs[2]:  # Distributions
+                        st.subheader("📊 Data Distributions")
+                        
+                        # Distribution plots
+                        fig_dist = visualizer.create_distribution_plots(comparator.df_a)
+                        st.plotly_chart(fig_dist, use_container_width=True, key="distributions_a")
+                        
+                        # Box plots for outlier detection
+                        fig_box = visualizer.create_box_plots(comparator.df_a)
+                        st.plotly_chart(fig_box, use_container_width=True, key="boxplots_a")
+                    
+                    with analysis_subtabs[3]:  # Correlations
+                        st.subheader("🔗 Correlation Analysis")
+                        
+                        correlation_data = analyzer.calculate_correlation_matrix(comparator.df_a)
+                        
+                        if 'message' not in correlation_data:
+                            # Correlation type selector
+                            corr_type = st.selectbox(
+                                "Correlation Method:",
+                                ["pearson", "spearman", "kendall"],
+                                index=0,
+                                help="Pearson: linear relationships, Spearman: monotonic relationships, Kendall: rank-based"
+                            )
+                            
+                            # Show correlation heatmap
+                            fig_corr = visualizer.create_correlation_heatmap(correlation_data, corr_type)
+                            st.plotly_chart(fig_corr, use_container_width=True, key="correlation_a")
+                            
+                            # Show strong correlations
+                            if correlation_data['strong_correlations']:
+                                st.subheader("💪 Strong Correlations Found")
+                                
+                                strong_corr_data = []
+                                for corr in correlation_data['strong_correlations']:
+                                    strong_corr_data.append({
+                                        'Column 1': corr['column1'],
+                                        'Column 2': corr['column2'],
+                                        'Correlation': f"{corr['correlation']:.3f}",
+                                        'Strength': corr['strength'].replace('_', ' ').title()
+                                    })
+                                
+                                st.dataframe(pd.DataFrame(strong_corr_data), hide_index=True, use_container_width=True)
+                            else:
+                                st.info("No strong correlations (>0.7) found between variables")
+                        else:
+                            st.info(correlation_data['message'])
+                    
+                    with analysis_subtabs[4]:  # Data Types
+                        st.subheader("📋 Data Types Analysis")
+                        
+                        # Data types pie chart
+                        fig_types = visualizer.create_data_types_pie_chart(analysis_a['data_types_analysis'])
+                        st.plotly_chart(fig_types, use_container_width=True, key="data_types_a")
+                        
+                        # Data types table with recommendations
+                        types_data = []
+                        for col, info in analysis_a['data_types_analysis'].items():
+                            types_data.append({
+                                'Column': col,
+                                'Current Type': info['current_type'],
+                                'Recommended Type': info['recommended_type'],
+                                'Unique Values': f"{info['unique_values']:,}",
+                                'Memory Usage': f"{info['memory_usage']:,} bytes",
+                                'Sample Values': ', '.join(str(v) for v in info['sample_values'][:3])
+                            })
+                        
+                        st.dataframe(pd.DataFrame(types_data), hide_index=True, use_container_width=True)
+                
+                tab_index += 1
+            
+            # Sheet B Analysis
+            if analysis_scope in ["Both Sheets", "Sheet B Only"]:
+                with tabs[tab_index]:
+                    st.subheader("📊 Sheet B Statistical Analysis")
+                    
+                    # Get current sheet name
+                    current_sheet_b_name = st.session_state.get('sheet_b', 'Sheet B')
+                    if st.session_state.get('sheets_swapped', False):
+                        display_name = f"{st.session_state.get('sheet_a', 'Unknown')} (currently Sheet B)"
+                    else:
+                        display_name = current_sheet_b_name
+                    
+                    # Perform analysis (similar to Sheet A but for df_b)
+                    analysis_b = analyzer.analyze_dataframe(comparator.df_b, display_name)
+                    
+                    # Create summary metrics
+                    summary_cards = visualizer.create_summary_metrics_cards(
+                        analysis_b['basic_info'], 
+                        analysis_b['missing_data_analysis']['_summary']
+                    )
+                    
+                    # Display summary cards
+                    card_cols = st.columns(len(summary_cards))
+                    for i, card in enumerate(summary_cards):
+                        with card_cols[i]:
+                            st.metric(
+                                label=f"{card['icon']} {card['title']}", 
+                                value=card['value']
+                            )
+                    
+                    # Analysis sub-tabs (same structure as Sheet A)
+                    analysis_subtabs = st.tabs([
+                        "📈 Descriptive Stats", 
+                        "🕳️ Missing Data", 
+                        "📊 Distributions", 
+                        "🔗 Correlations",
+                        "📋 Data Types"
+                    ])
+                    
+                    with analysis_subtabs[0]:  # Descriptive Stats
+                        st.subheader("📈 Descriptive Statistics")
+                        
+                        if 'message' not in analysis_b['descriptive_stats']:
+                            # Show descriptive statistics table
+                            desc_df = pd.DataFrame(analysis_b['descriptive_stats']).T
+                            
+                            if show_advanced:
+                                columns_to_show = ['count', 'mean', 'median', 'std_dev', 'min', 'max', 
+                                                 'q1', 'q3', 'skewness', 'kurtosis', 'coefficient_of_variation']
+                            else:
+                                columns_to_show = ['count', 'mean', 'median', 'std_dev', 'min', 'max']
+                            
+                            # Filter available columns
+                            available_columns = [col for col in columns_to_show if col in desc_df.columns]
+                            
+                            if available_columns:
+                                st.dataframe(
+                                    desc_df[available_columns].round(3), 
+                                    use_container_width=True
+                                )
+                                
+                                # Show visualization
+                                fig_desc = visualizer.create_descriptive_stats_chart(
+                                    analysis_b['descriptive_stats'], 
+                                    f"Descriptive Statistics - {display_name}"
+                                )
+                                st.plotly_chart(fig_desc, use_container_width=True, key="desc_stats_b")
+                        else:
+                            st.info(analysis_b['descriptive_stats']['message'])
+                    
+                    with analysis_subtabs[1]:  # Missing Data
+                        st.subheader("🕳️ Missing Data Analysis")
+                        
+                        # Missing data summary chart
+                        fig_missing = visualizer.create_missing_data_summary_chart(
+                            analysis_b['missing_data_analysis']
+                        )
+                        st.plotly_chart(fig_missing, use_container_width=True, key="missing_summary_b")
+                        
+                        # Missing data heatmap
+                        if len(comparator.df_b) <= 1000:  # Only show heatmap for smaller datasets
+                            fig_heatmap = visualizer.create_missing_data_heatmap(
+                                comparator.df_b, f"Missing Data Pattern - {display_name}"
+                            )
+                            st.plotly_chart(fig_heatmap, use_container_width=True, key="missing_heatmap_b")
+                        else:
+                            st.info("💡 Missing data heatmap not shown for large datasets (>1000 rows) to maintain performance")
+                    
+                    with analysis_subtabs[2]:  # Distributions
+                        st.subheader("📊 Data Distributions")
+                        
+                        # Distribution plots
+                        fig_dist = visualizer.create_distribution_plots(comparator.df_b)
+                        st.plotly_chart(fig_dist, use_container_width=True, key="distributions_b")
+                        
+                        # Box plots for outlier detection
+                        fig_box = visualizer.create_box_plots(comparator.df_b)
+                        st.plotly_chart(fig_box, use_container_width=True, key="boxplots_b")
+                    
+                    with analysis_subtabs[3]:  # Correlations
+                        st.subheader("🔗 Correlation Analysis")
+                        
+                        correlation_data = analyzer.calculate_correlation_matrix(comparator.df_b)
+                        
+                        if 'message' not in correlation_data:
+                            # Correlation type selector
+                            corr_type = st.selectbox(
+                                "Correlation Method:",
+                                ["pearson", "spearman", "kendall"],
+                                index=0,
+                                key="corr_type_b",
+                                help="Pearson: linear relationships, Spearman: monotonic relationships, Kendall: rank-based"
+                            )
+                            
+                            # Show correlation heatmap
+                            fig_corr = visualizer.create_correlation_heatmap(correlation_data, corr_type)
+                            st.plotly_chart(fig_corr, use_container_width=True, key="correlation_b")
+                            
+                            # Show strong correlations
+                            if correlation_data['strong_correlations']:
+                                st.subheader("💪 Strong Correlations Found")
+                                
+                                strong_corr_data = []
+                                for corr in correlation_data['strong_correlations']:
+                                    strong_corr_data.append({
+                                        'Column 1': corr['column1'],
+                                        'Column 2': corr['column2'],
+                                        'Correlation': f"{corr['correlation']:.3f}",
+                                        'Strength': corr['strength'].replace('_', ' ').title()
+                                    })
+                                
+                                st.dataframe(pd.DataFrame(strong_corr_data), hide_index=True, use_container_width=True)
+                            else:
+                                st.info("No strong correlations (>0.7) found between variables")
+                        else:
+                            st.info(correlation_data['message'])
+                    
+                    with analysis_subtabs[4]:  # Data Types
+                        st.subheader("📋 Data Types Analysis")
+                        
+                        # Data types pie chart
+                        fig_types = visualizer.create_data_types_pie_chart(analysis_b['data_types_analysis'])
+                        st.plotly_chart(fig_types, use_container_width=True, key="data_types_b")
+                        
+                        # Data types table with recommendations
+                        types_data = []
+                        for col, info in analysis_b['data_types_analysis'].items():
+                            types_data.append({
+                                'Column': col,
+                                'Current Type': info['current_type'],
+                                'Recommended Type': info['recommended_type'],
+                                'Unique Values': f"{info['unique_values']:,}",
+                                'Memory Usage': f"{info['memory_usage']:,} bytes",
+                                'Sample Values': ', '.join(str(v) for v in info['sample_values'][:3])
+                            })
+                        
+                        st.dataframe(pd.DataFrame(types_data), hide_index=True, use_container_width=True)
+        
+        elif analysis_scope == "Comparative Analysis":
+            st.subheader("⚖️ Comparative Statistical Analysis")
+            
+            # Perform analysis on both sheets
+            analyzer = StatisticalAnalyzer()
+            visualizer = StatisticalVisualizer()
+            
+            try:
+                analysis_a = analyzer.analyze_dataframe(comparator.df_a)
+            except Exception as e:
+                st.error(f"Error analyzing {display_name_a}: {str(e)}")
+                analysis_a = {}
+            
+            try:
+                analysis_b = analyzer.analyze_dataframe(comparator.df_b)
+            except Exception as e:
+                st.error(f"Error analyzing {display_name_b}: {str(e)}")
+                analysis_b = {}
+            
+            # Display name helper
+            sheet_a_name = st.session_state.get('sheet_a', 'Sheet A')
+            sheet_b_name = st.session_state.get('sheet_b', 'Sheet B')
+            display_name_a = f"Sheet A ({sheet_a_name})" if sheet_a_name != 'Sheet A' else "Sheet A"
+            display_name_b = f"Sheet B ({sheet_b_name})" if sheet_b_name != 'Sheet B' else "Sheet B"
+            
+            # High-level comparison metrics
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                diff_rows = len(comparator.df_b) - len(comparator.df_a)
+                st.metric(
+                    "📊 Row Difference", 
+                    f"{diff_rows:+,}",
+                    help=f"{display_name_a}: {len(comparator.df_a):,} rows\n{display_name_b}: {len(comparator.df_b):,} rows"
+                )
+            
+            with col2:
+                diff_cols = len(comparator.df_b.columns) - len(comparator.df_a.columns)
+                st.metric(
+                    "📋 Column Difference", 
+                    f"{diff_cols:+}",
+                    help=f"{display_name_a}: {len(comparator.df_a.columns)} columns\n{display_name_b}: {len(comparator.df_b.columns)} columns"
+                )
+            
+            with col3:
+                memory_a = analysis_a.get('memory_usage', {}).get('total_mb', 0) if analysis_a else 0
+                memory_b = analysis_b.get('memory_usage', {}).get('total_mb', 0) if analysis_b else 0
+                memory_diff = (memory_b or 0) - (memory_a or 0)
+                st.metric(
+                    "💾 Memory Difference", 
+                    f"{memory_diff:+.1f} MB",
+                    help=f"{display_name_a}: {memory_a or 0:.1f} MB\n{display_name_b}: {memory_b or 0:.1f} MB"
+                )
+            
+            with col4:
+                missing_a = analysis_a.get('missing_data_analysis', {}).get('total_missing_percentage', 0) if analysis_a else 0
+                missing_b = analysis_b.get('missing_data_analysis', {}).get('total_missing_percentage', 0) if analysis_b else 0
+                missing_diff = (missing_b or 0) - (missing_a or 0)
+                st.metric(
+                    "🕳️ Missing Data Difference", 
+                    f"{missing_diff:+.1f}%",
+                    help=f"{display_name_a}: {missing_a or 0:.1f}% missing\n{display_name_b}: {missing_b or 0:.1f}% missing"
+                )
+            
+            # Detailed comparative analysis tabs
+            comp_tabs = st.tabs([
+                "📈 Descriptive Stats", 
+                "🕳️ Missing Data", 
+                "📊 Distributions", 
+                "🔗 Correlations",
+                "📋 Data Types",
+                "📋 Summary Report"
+            ])
+            
+            with comp_tabs[0]:  # Descriptive Stats Comparison
+                st.subheader("📈 Descriptive Statistics Comparison")
+                
+                # Get numerical columns that exist in both datasets
+                num_cols_a = set(comparator.df_a.select_dtypes(include=[np.number]).columns)
+                num_cols_b = set(comparator.df_b.select_dtypes(include=[np.number]).columns)
+                common_num_cols = list(num_cols_a.intersection(num_cols_b))
+                
+                if common_num_cols:
+                    col_choice = st.selectbox(
+                        "Choose column to compare:",
+                        common_num_cols,
+                        help="Select a numerical column that exists in both sheets"
+                    )
+                    
+                    if col_choice:
+                        # Side-by-side comparison
+                        comp_col1, comp_col2 = st.columns(2)
+                        
+                        with comp_col1:
+                            st.markdown(f"**{display_name_a}**")
+                            stats_a = comparator.df_a[col_choice].describe()
+                            st.dataframe(stats_a.to_frame().round(3), use_container_width=True)
+                        
+                        with comp_col2:
+                            st.markdown(f"**{display_name_b}**")
+                            stats_b = comparator.df_b[col_choice].describe()
+                            st.dataframe(stats_b.to_frame().round(3), use_container_width=True)
+                        
+                        # Comparison chart
+                        fig_comp = visualizer.create_comparative_distribution_plot(
+                            comparator.df_a[col_choice], 
+                            comparator.df_b[col_choice],
+                            f"{col_choice} - Distribution Comparison",
+                            display_name_a,
+                            display_name_b
+                        )
+                        st.plotly_chart(fig_comp, use_container_width=True, key="comp_dist")
+                        
+                        # Statistical significance test
+                        from scipy import stats
+                        statistic, p_value = stats.ks_2samp(
+                            comparator.df_a[col_choice].dropna(), 
+                            comparator.df_b[col_choice].dropna()
+                        )
+                        
+                        st.subheader("🔬 Statistical Significance Test")
+                        st.write(f"**Kolmogorov-Smirnov Test:**")
+                        st.write(f"- Statistic: {statistic:.4f}")
+                        st.write(f"- P-value: {p_value:.4f}")
+                        
+                        if p_value < 0.05:
+                            st.error("� **Significant difference detected** (p < 0.05): The distributions are statistically different.")
+                        else:
+                            st.success("✅ **No significant difference** (p ≥ 0.05): The distributions are statistically similar.")
+                
+                else:
+                    st.info("ℹ️ **No Common Numerical Columns Found**")
+                    st.write("The selected sheets don't have numerical columns with identical names for direct comparison.")
+                    
+                    # Show available numerical columns in each sheet
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown(f"**{display_name_a} has {len(num_cols_a)} numerical columns:**")
+                        for col in sorted(num_cols_a):
+                            st.write(f"• {col}")
+                    
+                    with col2:
+                        st.markdown(f"**{display_name_b} has {len(num_cols_b)} numerical columns:**")
+                        for col in sorted(num_cols_b):
+                            st.write(f"• {col}")
+                    
+                    st.markdown("**💡 For meaningful comparisons:** Select sheets with similar column structures (e.g., both sales data sheets with 'Amount', 'Quantity' columns).")
+            
+            with comp_tabs[1]:  # Missing Data Comparison
+                st.subheader("🕳️ Missing Data Comparison")
+                
+                # Create comparative missing data visualization
+                fig_missing_comp = visualizer.create_comparative_missing_data_chart(
+                    analysis_a['missing_data_analysis'],
+                    analysis_b['missing_data_analysis'],
+                    display_name_a,
+                    display_name_b
+                )
+                st.plotly_chart(fig_missing_comp, use_container_width=True, key="comp_missing")
+                
+                # Detailed missing data comparison table
+                missing_comp_data = []
+                all_columns = set(list(comparator.df_a.columns) + list(comparator.df_b.columns))
+                
+                for col in sorted(all_columns):
+                    missing_a = (comparator.df_a[col].isnull().sum() / len(comparator.df_a) * 100) if col in comparator.df_a.columns else None
+                    missing_b = (comparator.df_b[col].isnull().sum() / len(comparator.df_b) * 100) if col in comparator.df_b.columns else None
+                    
+                    missing_comp_data.append({
+                        'Column': col,
+                        f'{display_name_a} Missing (%)': f"{missing_a:.1f}%" if missing_a is not None else "N/A",
+                        f'{display_name_b} Missing (%)': f"{missing_b:.1f}%" if missing_b is not None else "N/A",
+                        'Difference': f"{(missing_b or 0) - (missing_a or 0):+.1f}%" if missing_a is not None and missing_b is not None else "N/A"
+                    })
+                
+                st.dataframe(pd.DataFrame(missing_comp_data), hide_index=True, use_container_width=True)
+            
+            with comp_tabs[2]:  # Distribution Comparison
+                st.subheader("📊 Distribution Comparison")
+                
+                if common_num_cols:
+                    # Multi-column distribution comparison
+                    selected_cols = st.multiselect(
+                        "Select columns to compare distributions:",
+                        common_num_cols,
+                        default=common_num_cols[:3] if len(common_num_cols) >= 3 else common_num_cols,
+                        help="Select up to 5 columns for comparison"
+                    )
+                    
+                    if selected_cols:
+                        for col in selected_cols[:5]:  # Limit to 5 for performance
+                            st.markdown(f"**{col} Distribution Comparison**")
+                            
+                            fig_hist_comp = visualizer.create_comparative_histogram(
+                                comparator.df_a[col],
+                                comparator.df_b[col],
+                                col,
+                                display_name_a,
+                                display_name_b
+                            )
+                            st.plotly_chart(fig_hist_comp, use_container_width=True, key=f"comp_hist_{col}")
+                else:
+                    st.info("ℹ️ **No Common Numerical Columns Found**")
+                    st.write("The selected sheets don't have columns with identical names, so direct distribution comparison isn't possible.")
+                    
+                    # Show what numerical columns each dataset has
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown(f"**📊 {display_name_a} Numerical Columns:**")
+                        nums_a = list(num_cols_a)
+                        if nums_a:
+                            for col in nums_a:
+                                st.write(f"• {col}")
+                        else:
+                            st.write("No numerical columns found")
+                    
+                    with col2:
+                        st.markdown(f"**📊 {display_name_b} Numerical Columns:**")
+                        nums_b = list(num_cols_b)
+                        if nums_b:
+                            for col in nums_b:
+                                st.write(f"• {col}")
+                        else:
+                            st.write("No numerical columns found")
+                    
+                    st.markdown("**💡 Suggestion:** For meaningful comparisons, try selecting sheets that have similar column structures, or use the individual statistical analysis for each sheet separately.")
+            
+            with comp_tabs[3]:  # Correlation Comparison
+                st.subheader("🔗 Correlation Comparison")
+                
+                # Calculate correlations for both datasets
+                corr_a = analyzer.calculate_correlation_matrix(comparator.df_a)
+                corr_b = analyzer.calculate_correlation_matrix(comparator.df_b)
+                
+                comp_corr_col1, comp_corr_col2 = st.columns(2)
+                
+                with comp_corr_col1:
+                    st.markdown(f"**{display_name_a} Correlations**")
+                    if 'message' not in corr_a:
+                        fig_corr_a = visualizer.create_correlation_heatmap(corr_a, 'pearson')
+                        st.plotly_chart(fig_corr_a, use_container_width=True, key="comp_corr_a")
+                    else:
+                        st.info(corr_a['message'])
+                
+                with comp_corr_col2:
+                    st.markdown(f"**{display_name_b} Correlations**")
+                    if 'message' not in corr_b:
+                        fig_corr_b = visualizer.create_correlation_heatmap(corr_b, 'pearson')
+                        st.plotly_chart(fig_corr_b, use_container_width=True, key="comp_corr_b")
+                    else:
+                        st.info(corr_b['message'])
+                
+                # Correlation strength comparison
+                if 'message' not in corr_a and 'message' not in corr_b:
+                    st.subheader("🔍 Strong Correlations Comparison")
+                    
+                    strong_a = corr_a.get('strong_correlations', [])
+                    strong_b = corr_b.get('strong_correlations', [])
+                    
+                    comp_strong_col1, comp_strong_col2 = st.columns(2)
+                    
+                    with comp_strong_col1:
+                        st.markdown(f"**{display_name_a}** ({len(strong_a)} strong correlations)")
+                        if strong_a:
+                            for corr in strong_a[:5]:
+                                st.write(f"• {corr['column1']} ↔ {corr['column2']}: {corr['correlation']:.3f}")
+                        else:
+                            st.info("No strong correlations found")
+                    
+                    with comp_strong_col2:
+                        st.markdown(f"**{display_name_b}** ({len(strong_b)} strong correlations)")
+                        if strong_b:
+                            for corr in strong_b[:5]:
+                                st.write(f"• {corr['column1']} ↔ {corr['column2']}: {corr['correlation']:.3f}")
+                        else:
+                            st.info("No strong correlations found")
+            
+            with comp_tabs[4]:  # Data Types Comparison
+                st.subheader("📋 Data Types Comparison")
+                
+                # Compare data types
+                types_comp_data = []
+                all_columns = set(list(comparator.df_a.columns) + list(comparator.df_b.columns))
+                
+                for col in sorted(all_columns):
+                    type_a = str(comparator.df_a[col].dtype) if col in comparator.df_a.columns else "N/A"
+                    type_b = str(comparator.df_b[col].dtype) if col in comparator.df_b.columns else "N/A"
+                    
+                    # Check if types match
+                    match_status = "✅" if type_a == type_b and type_a != "N/A" else "❌" if type_a != "N/A" and type_b != "N/A" else "⚠️"
+                    
+                    types_comp_data.append({
+                        'Column': col,
+                        f'{display_name_a} Type': type_a,
+                        f'{display_name_b} Type': type_b,
+                        'Match': match_status
+                    })
+                
+                st.dataframe(pd.DataFrame(types_comp_data), hide_index=True, use_container_width=True)
+                
+                # Summary of type mismatches
+                mismatches = [item for item in types_comp_data if item['Match'] == '❌']
+                if mismatches:
+                    st.warning(f"⚠️ **{len(mismatches)} data type mismatches found.** These may cause issues in analysis or merging.")
+                else:
+                    st.success("✅ **All common columns have matching data types.**")
+            
+            with comp_tabs[5]:  # Summary Report
+                st.subheader("📋 Comparative Analysis Summary")
+                
+                # Generate comprehensive comparison report
+                st.markdown("### 📊 **Dataset Overview**")
+                
+                # Safe formatting with default values
+                safe_memory_a = memory_a if memory_a is not None else 0
+                safe_memory_b = memory_b if memory_b is not None else 0
+                safe_missing_a = missing_a if missing_a is not None else 0
+                safe_missing_b = missing_b if missing_b is not None else 0
+                
+                overview_data = {
+                    'Metric': [
+                        'Total Rows',
+                        'Total Columns', 
+                        'Memory Usage (MB)',
+                        'Missing Data (%)',
+                        'Numerical Columns',
+                        'Categorical Columns',
+                        'Date Columns'
+                    ],
+                    display_name_a: [
+                        f"{len(comparator.df_a):,}",
+                        len(comparator.df_a.columns),
+                        f"{safe_memory_a:.1f}",
+                        f"{safe_missing_a:.1f}%",
+                        len(comparator.df_a.select_dtypes(include=[np.number]).columns),
+                        len(comparator.df_a.select_dtypes(include=['object', 'category']).columns),
+                        len(comparator.df_a.select_dtypes(include=['datetime64']).columns)
+                    ],
+                    display_name_b: [
+                        f"{len(comparator.df_b):,}",
+                        len(comparator.df_b.columns),
+                        f"{safe_memory_b:.1f}",
+                        f"{safe_missing_b:.1f}%",
+                        len(comparator.df_b.select_dtypes(include=[np.number]).columns),
+                        len(comparator.df_b.select_dtypes(include=['object', 'category']).columns),
+                        len(comparator.df_b.select_dtypes(include=['datetime64']).columns)
+                    ]
+                }
+                
+                st.dataframe(pd.DataFrame(overview_data), hide_index=True, use_container_width=True)
+                
+                # Key insights
+                st.markdown("### 🔍 **Key Insights**")
+                
+                insights = []
+                
+                # Size comparison
+                if len(comparator.df_b) > len(comparator.df_a):
+                    insights.append(f"📈 {display_name_b} has {len(comparator.df_b) - len(comparator.df_a):,} more rows than {display_name_a}")
+                elif len(comparator.df_a) > len(comparator.df_b):
+                    insights.append(f"📉 {display_name_a} has {len(comparator.df_a) - len(comparator.df_b):,} more rows than {display_name_b}")
+                else:
+                    insights.append(f"⚖️ Both datasets have the same number of rows ({len(comparator.df_a):,})")
+                
+                # Missing data comparison
+                if safe_missing_a != "N/A" and safe_missing_b != "N/A" and abs(missing_diff) > 5:
+                    if missing_diff > 0:
+                        insights.append(f"🕳️ {display_name_b} has significantly more missing data ({missing_diff:+.1f}%)")
+                    else:
+                        insights.append(f"🕳️ {display_name_a} has significantly more missing data ({abs(missing_diff):.1f}%)")
+                
+                # Column overlap
+                common_cols = set(comparator.df_a.columns).intersection(set(comparator.df_b.columns))
+                total_unique_cols = len(set(comparator.df_a.columns).union(set(comparator.df_b.columns)))
+                overlap_pct = len(common_cols) / total_unique_cols * 100
+                
+                insights.append(f"🔗 Column overlap: {overlap_pct:.1f}% ({len(common_cols)} of {total_unique_cols} total unique columns)")
+                
+                # Memory efficiency
+                if safe_memory_a != "N/A" and safe_memory_b != "N/A" and abs(memory_diff) > 1:
+                    if memory_diff > 0:
+                        insights.append(f"💾 {display_name_b} uses {memory_diff:.1f} MB more memory")
+                    else:
+                        insights.append(f"💾 {display_name_a} uses {abs(memory_diff):.1f} MB more memory")
+                
+                for insight in insights:
+                    st.write(f"• {insight}")
+                
+                # Recommendations
+                st.markdown("### 💡 **Recommendations**")
+                
+                recommendations = []
+                
+                if len(mismatches) > 0:
+                    recommendations.append("🔧 **Data Type Alignment**: Consider standardizing data types for common columns to enable better analysis and merging.")
+                
+                if safe_missing_a != "N/A" and safe_missing_b != "N/A" and abs(missing_diff) > 10:
+                    recommendations.append("🧹 **Data Quality**: Address missing data patterns, especially in the dataset with higher missing percentages.")
+                
+                if overlap_pct < 50:
+                    recommendations.append("📋 **Schema Review**: Low column overlap suggests these datasets may serve different purposes or need schema alignment.")
+                
+                if abs(diff_rows) > len(comparator.df_a) * 0.1:  # More than 10% difference
+                    recommendations.append("⚖️ **Size Disparity**: Significant size difference between datasets - consider if this is expected or requires investigation.")
+                
+                if not recommendations:
+                    recommendations.append("✅ **Well Aligned**: The datasets appear to be well-structured and comparable for analysis.")
+                
+                for rec in recommendations:
+                    st.write(f"• {rec}")
+                
+                # Export comparison report
+                if st.button("📄 Generate Detailed Comparison Report", help="Generate a comprehensive comparison report"):
+                    # Create detailed report data
+                    report_data = {
+                        'comparison_timestamp': datetime.now().isoformat(),
+                        'dataset_a': {'name': display_name_a, 'rows': len(comparator.df_a), 'columns': len(comparator.df_a.columns)},
+                        'dataset_b': {'name': display_name_b, 'rows': len(comparator.df_b), 'columns': len(comparator.df_b.columns)},
+                        'overview': overview_data,
+                        'insights': insights,
+                        'recommendations': recommendations,
+                        'type_mismatches': len(mismatches),
+                        'column_overlap_percentage': overlap_pct
+                    }
+                    
+                    # Convert to JSON for download
+                    import json
+                    report_json = json.dumps(report_data, indent=2, default=str)
+                    
+                    st.download_button(
+                        label="📥 Download Comparison Report (JSON)",
+                        data=report_json,
+                        file_name=f"comparative_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                        mime="application/json"
+                    )
+                    
+                    st.success("✅ Comparison report generated successfully!")
     
     # Column selection and comparison
     if comparator.df_a is not None and comparator.df_b is not None:
@@ -4078,9 +5254,1470 @@ def main():
                 else:
                     st.success("🎉 All records were matched - no unmatched data!")
             
-            # Export functionality
+            # Data Quality Assessment Section
             st.divider()
-            st.header("📥 Export Results")
+            st.header("🔍 Data Quality Assessment")
+            
+            # Import the data quality module
+            from analysis.data_quality import DataQualityAssessment
+            
+            # Create quality assessment tabs
+            quality_tabs = st.tabs([
+                "📊 Overview", 
+                "🕳️ Missing Data", 
+                "🔄 Duplicates", 
+                "📋 Data Types",
+                "💡 Recommendations"
+            ])
+            
+            with quality_tabs[0]:  # Overview
+                st.subheader("📈 Data Quality Overview")
+                
+                # Create quality assessment for both sheets
+                qa_col1, qa_col2 = st.columns(2)
+                
+                with qa_col1:
+                    st.markdown(f"**🔍 {display_sheet_a} Quality Analysis**")
+                    
+                    with st.spinner("Analyzing data quality..."):
+                        qa_a = DataQualityAssessment(comparator.df_a, display_sheet_a)
+                        quality_report_a = qa_a.generate_quality_report()
+                    
+                    # Overall quality metrics
+                    metrics_a = quality_report_a['overall_metrics']
+                    st.metric("Overall Quality Score", f"{metrics_a['overall_quality_score']:.1f}/100")
+                    
+                    # Sub-metrics
+                    metric_col1, metric_col2 = st.columns(2)
+                    with metric_col1:
+                        st.metric("Missing Data", f"{metrics_a['missing_data_score']:.1f}/100")
+                        st.metric("Data Types", f"{metrics_a['data_type_score']:.1f}/100")
+                    with metric_col2:
+                        st.metric("Duplicates", f"{metrics_a['duplicate_score']:.1f}/100")
+                
+                with qa_col2:
+                    st.markdown(f"**🔍 {display_sheet_b} Quality Analysis**")
+                    
+                    with st.spinner("Analyzing data quality..."):
+                        qa_b = DataQualityAssessment(comparator.df_b, display_sheet_b)
+                        quality_report_b = qa_b.generate_quality_report()
+                    
+                    # Overall quality metrics
+                    metrics_b = quality_report_b['overall_metrics']
+                    st.metric("Overall Quality Score", f"{metrics_b['overall_quality_score']:.1f}/100")
+                    
+                    # Sub-metrics
+                    metric_col3, metric_col4 = st.columns(2)
+                    with metric_col3:
+                        st.metric("Missing Data", f"{metrics_b['missing_data_score']:.1f}/100")
+                        st.metric("Data Types", f"{metrics_b['data_type_score']:.1f}/100")
+                    with metric_col4:
+                        st.metric("Duplicates", f"{metrics_b['duplicate_score']:.1f}/100")
+                
+                # Comparative quality visualization
+                st.markdown("### 📊 Quality Comparison Dashboard")
+                
+                # Create comparative quality chart
+                comparison_data = {
+                    'Metric': ['Overall Quality', 'Missing Data', 'Duplicates', 'Data Types'],
+                    display_sheet_a: [
+                        metrics_a['overall_quality_score'],
+                        metrics_a['missing_data_score'],
+                        metrics_a['duplicate_score'],
+                        metrics_a['data_type_score']
+                    ],
+                    display_sheet_b: [
+                        metrics_b['overall_quality_score'],
+                        metrics_b['missing_data_score'],
+                        metrics_b['duplicate_score'],
+                        metrics_b['data_type_score']
+                    ]
+                }
+                
+                comparison_df = pd.DataFrame(comparison_data)
+                st.bar_chart(comparison_df.set_index('Metric'), height=400)
+            
+            with quality_tabs[1]:  # Missing Data
+                st.subheader("🕳️ Missing Data Analysis")
+                
+                missing_col1, missing_col2 = st.columns(2)
+                
+                with missing_col1:
+                    st.markdown(f"**{display_sheet_a} Missing Data**")
+                    
+                    # Missing data chart
+                    fig_missing_a = visualizer.create_missing_data_chart(quality_report_a['missing_data'])
+                    st.plotly_chart(fig_missing_a, use_container_width=True, key="missing_a")
+                    
+                    # Missing data completeness gauge
+                    completeness_a = quality_report_a['missing_data']['overall_completeness']
+                    fig_completeness_a = visualizer.create_data_completeness_gauge(completeness_a)
+                    st.plotly_chart(fig_completeness_a, use_container_width=True, key="completeness_a")
+                
+                with missing_col2:
+                    st.markdown(f"**{display_sheet_b} Missing Data**")
+                    
+                    # Missing data chart
+                    fig_missing_b = visualizer.create_missing_data_chart(quality_report_b['missing_data'])
+                    st.plotly_chart(fig_missing_b, use_container_width=True, key="missing_b")
+                    
+                    # Missing data completeness gauge
+                    completeness_b = quality_report_b['missing_data']['overall_completeness']
+                    fig_completeness_b = visualizer.create_data_completeness_gauge(completeness_b)
+                    st.plotly_chart(fig_completeness_b, use_container_width=True, key="completeness_b")
+                
+                # Missing data summary
+                st.markdown("### 📊 Missing Data Summary")
+                
+                missing_summary_data = {
+                    'Dataset': [display_sheet_a, display_sheet_b],
+                    'Overall Completeness (%)': [
+                        quality_report_a['missing_data']['overall_completeness'],
+                        quality_report_b['missing_data']['overall_completeness']
+                    ],
+                    'Columns with Missing Data': [
+                        quality_report_a['missing_data']['columns_with_missing_data'],
+                        quality_report_b['missing_data']['columns_with_missing_data']
+                    ],
+                    'Empty Rows': [
+                        quality_report_a['missing_data']['completely_empty_rows'],
+                        quality_report_b['missing_data']['completely_empty_rows']
+                    ]
+                }
+                
+                st.dataframe(pd.DataFrame(missing_summary_data), use_container_width=True)
+            
+            with quality_tabs[2]:  # Duplicates
+                st.subheader("🔄 Duplicate Analysis")
+                
+                dup_col1, dup_col2 = st.columns(2)
+                
+                with dup_col1:
+                    st.markdown(f"**{display_sheet_a} Duplicates**")
+                    
+                    # Duplicate analysis chart
+                    fig_dup_a = visualizer.create_duplicate_analysis_chart(quality_report_a['duplicates'])
+                    st.plotly_chart(fig_dup_a, use_container_width=True, key="duplicates_a")
+                    
+                    # Duplicate summary
+                    dup_summary_a = quality_report_a['duplicates']['exact_duplicates']
+                    st.metric("Exact Duplicates", f"{dup_summary_a['count']:,} ({dup_summary_a['percentage']:.1f}%)")
+                
+                with dup_col2:
+                    st.markdown(f"**{display_sheet_b} Duplicates**")
+                    
+                    # Duplicate analysis chart
+                    fig_dup_b = visualizer.create_duplicate_analysis_chart(quality_report_b['duplicates'])
+                    st.plotly_chart(fig_dup_b, use_container_width=True, key="duplicates_b")
+                    
+                    # Duplicate summary
+                    dup_summary_b = quality_report_b['duplicates']['exact_duplicates']
+                    st.metric("Exact Duplicates", f"{dup_summary_b['count']:,} ({dup_summary_b['percentage']:.1f}%)")
+                
+                # Show sample duplicates if any exist
+                if dup_summary_a['count'] > 0:
+                    with st.expander(f"📋 Sample Duplicate Rows from {display_sheet_a}"):
+                        duplicate_indices = dup_summary_a['duplicate_rows'][:5]
+                        if duplicate_indices:
+                            st.dataframe(comparator.df_a.iloc[duplicate_indices], use_container_width=True)
+                
+                if dup_summary_b['count'] > 0:
+                    with st.expander(f"📋 Sample Duplicate Rows from {display_sheet_b}"):
+                        duplicate_indices = dup_summary_b['duplicate_rows'][:5]
+                        if duplicate_indices:
+                            st.dataframe(comparator.df_b.iloc[duplicate_indices], use_container_width=True)
+            
+            with quality_tabs[3]:  # Data Types
+                st.subheader("📋 Data Type Analysis")
+                
+                type_col1, type_col2 = st.columns(2)
+                
+                with type_col1:
+                    st.markdown(f"**{display_sheet_a} Data Types**")
+                    
+                    # Data type issues chart
+                    fig_types_a = visualizer.create_data_type_issues_chart(quality_report_a['data_type_validation'])
+                    st.plotly_chart(fig_types_a, use_container_width=True, key="types_a")
+                
+                with type_col2:
+                    st.markdown(f"**{display_sheet_b} Data Types**")
+                    
+                    # Data type issues chart
+                    fig_types_b = visualizer.create_data_type_issues_chart(quality_report_b['data_type_validation'])
+                    st.plotly_chart(fig_types_b, use_container_width=True, key="types_b")
+                
+                # Data type summary table
+                st.markdown("### 📊 Data Type Summary")
+                
+                type_summary_a = quality_report_a['data_type_validation']['summary']
+                type_summary_b = quality_report_b['data_type_validation']['summary']
+                
+                type_summary_data = {
+                    'Metric': ['Columns Analyzed', 'Columns with Issues', 'Convertible Columns', 'Data Quality Score'],
+                    display_sheet_a: [
+                        type_summary_a['total_columns_analyzed'],
+                        type_summary_a['columns_with_issues'],
+                        type_summary_a['convertible_columns'],
+                        f"{type_summary_a['data_quality_score']:.1f}/100"
+                    ],
+                    display_sheet_b: [
+                        type_summary_b['total_columns_analyzed'],
+                        type_summary_b['columns_with_issues'],
+                        type_summary_b['convertible_columns'],
+                        f"{type_summary_b['data_quality_score']:.1f}/100"
+                    ]
+                }
+                
+                st.dataframe(pd.DataFrame(type_summary_data), use_container_width=True)
+            
+            with quality_tabs[4]:  # Recommendations
+                st.subheader("💡 Data Quality Recommendations")
+                
+                rec_col1, rec_col2 = st.columns(2)
+                
+                with rec_col1:
+                    st.markdown(f"**🔧 Recommendations for {display_sheet_a}**")
+                    
+                    recommendations_a = quality_report_a['recommendations']
+                    for i, rec in enumerate(recommendations_a):
+                        st.write(f"{i+1}. {rec}")
+                
+                with rec_col2:
+                    st.markdown(f"**🔧 Recommendations for {display_sheet_b}**")
+                    
+                    recommendations_b = quality_report_b['recommendations']
+                    for i, rec in enumerate(recommendations_b):
+                        st.write(f"{i+1}. {rec}")
+                
+                # Combined quality improvement suggestions
+                st.markdown("### 🎯 Combined Quality Improvement Plan")
+                
+                combined_issues = []
+                
+                # Analyze common issues
+                if metrics_a['missing_data_score'] < 80 or metrics_b['missing_data_score'] < 80:
+                    combined_issues.append("🕳️ **Missing Data**: Both datasets have significant missing data. Consider data collection improvements or imputation strategies.")
+                
+                if metrics_a['duplicate_score'] < 90 or metrics_b['duplicate_score'] < 90:
+                    combined_issues.append("🔄 **Duplicates**: Implement data deduplication processes before analysis.")
+                
+                if metrics_a['data_type_score'] < 85 or metrics_b['data_type_score'] < 85:
+                    combined_issues.append("📋 **Data Types**: Standardize data entry formats and implement type validation.")
+                
+                # Overall quality comparison
+                avg_quality_a = metrics_a['overall_quality_score']
+                avg_quality_b = metrics_b['overall_quality_score']
+                
+                if abs(avg_quality_a - avg_quality_b) > 20:
+                    if avg_quality_a > avg_quality_b:
+                        combined_issues.append(f"⚖️ **Quality Gap**: {display_sheet_a} has significantly better quality ({avg_quality_a:.1f}) than {display_sheet_b} ({avg_quality_b:.1f}). Focus improvement efforts on {display_sheet_b}.")
+                    else:
+                        combined_issues.append(f"⚖️ **Quality Gap**: {display_sheet_b} has significantly better quality ({avg_quality_b:.1f}) than {display_sheet_a} ({avg_quality_a:.1f}). Focus improvement efforts on {display_sheet_a}.")
+                
+                if not combined_issues:
+                    st.success("✅ **Excellent Overall Quality**: Both datasets show good quality metrics across all dimensions!")
+                else:
+                    for issue in combined_issues:
+                        st.write(f"• {issue}")
+                
+                # Export quality report
+                if st.button("📄 Generate Quality Assessment Report"):
+                    quality_report_data = {
+                        'timestamp': datetime.now().isoformat(),
+                        'dataset_a': {
+                            'name': display_sheet_a,
+                            'metrics': metrics_a,
+                            'recommendations': recommendations_a
+                        },
+                        'dataset_b': {
+                            'name': display_sheet_b,
+                            'metrics': metrics_b,
+                            'recommendations': recommendations_b
+                        },
+                        'combined_recommendations': combined_issues
+                    }
+                    
+                    import json
+                    report_json = json.dumps(quality_report_data, indent=2, default=str)
+                    
+                    st.download_button(
+                        label="📥 Download Quality Report (JSON)",
+                        data=report_json,
+                        file_name=f"data_quality_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                        mime="application/json"
+                    )
+                    
+                    st.success("✅ Quality assessment report generated successfully!")
+
+    # BUSINESS INTELLIGENCE TAB
+    with main_tabs[2]:
+        st.header("🚀 Business Intelligence Analysis")
+        st.markdown("**Comprehensive business analysis with RFP Bayanati specifications**")
+        
+        # Only show BI analysis if data is loaded
+        if comparator.df_a is not None and comparator.df_b is not None:
+            # Import the business intelligence module
+            from analysis.business_intelligence import BusinessIntelligenceAnalyzer
+            
+            # Create organized BI analysis tabs
+            bi_tabs = st.tabs([
+                "� Executive Summary",
+                "� Data Overview", 
+                "� Financial Analysis", 
+                "� Performance KPIs",
+                "� Customer Insights", 
+                "📦 Product Analysis", 
+                "📊 Financial Ratios",
+                "🎯 Advanced KPIs",
+                "⚠️ Risk Assessment",
+                "🔄 Comparative Analysis",
+                "📈 Interactive Dashboard"
+            ])
+            
+            # Perform BI analysis for both datasets
+            bi_analyzer_a = BusinessIntelligenceAnalyzer(comparator.df_a)
+            bi_analyzer_b = BusinessIntelligenceAnalyzer(comparator.df_b)
+            
+            # Executive Summary Tab
+            with bi_tabs[0]:
+                    st.subheader("� Executive Summary & Strategic Insights")
+                    st.markdown("**Comprehensive business analysis summary with key findings and recommendations**")
+                    
+                    # Generate executive summaries for both datasets
+                    exec_summary_a = bi_analyzer_a.generate_executive_summary()
+                    exec_summary_b = bi_analyzer_b.generate_executive_summary()
+                    
+                    # Performance Scorecard Section
+                    st.subheader("🎯 Performance Scorecard")
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.write(f"**{display_sheet_a} Performance**")
+                        
+                        if 'performance_scorecard' in exec_summary_a:
+                            scorecard = exec_summary_a['performance_scorecard']
+                            
+                            # Performance metrics
+                            perf_cols = st.columns(2)
+                            with perf_cols[0]:
+                                st.metric(
+                                    "Overall Score", 
+                                    f"{scorecard.get('overall_score', 0):.1f}/100",
+                                    scorecard.get('performance_grade', 'N/A')
+                                )
+                            with perf_cols[1]:
+                                st.metric(
+                                    "Risk Level", 
+                                    exec_summary_a.get('risk_assessment', {}).get('overall_risk_level', 'UNKNOWN'),
+                                    f"{exec_summary_a.get('risk_assessment', {}).get('critical_issues', 0)} critical issues"
+                                )
+                            
+                            # Performance visualization
+                            score = scorecard.get('overall_score', 0)
+                            if score >= 85:
+                                st.success(f"🏆 **Excellent Performance** ({scorecard.get('performance_grade', 'A')})")
+                            elif score >= 70:
+                                st.info(f"✅ **Good Performance** ({scorecard.get('performance_grade', 'B')})")
+                            elif score >= 60:
+                                st.warning(f"⚠️ **Average Performance** ({scorecard.get('performance_grade', 'C')})")
+                            else:
+                                st.error(f"❌ **Below Average Performance** ({scorecard.get('performance_grade', 'D')})")
+                        
+                        # Financial highlights
+                        if 'financial_highlights' in exec_summary_a:
+                            financial = exec_summary_a['financial_highlights']
+                            st.write("**💰 Financial Highlights:**")
+                            if 'total_value' in financial:
+                                st.write(f"• Total Value: **{financial['total_value']}**")
+                            if 'average_transaction' in financial:
+                                st.write(f"• Average Transaction: **{financial['average_transaction']}**")
+                            if 'value_concentration' in financial:
+                                st.write(f"• Value Distribution: {financial['value_concentration']}")
+                    
+                    with col2:
+                        st.write(f"**{display_sheet_b} Performance**")
+                        
+                        if 'performance_scorecard' in exec_summary_b:
+                            scorecard = exec_summary_b['performance_scorecard']
+                            
+                            # Performance metrics
+                            perf_cols = st.columns(2)
+                            with perf_cols[0]:
+                                st.metric(
+                                    "Overall Score", 
+                                    f"{scorecard.get('overall_score', 0):.1f}/100",
+                                    scorecard.get('performance_grade', 'N/A')
+                                )
+                            with perf_cols[1]:
+                                st.metric(
+                                    "Risk Level", 
+                                    exec_summary_b.get('risk_assessment', {}).get('overall_risk_level', 'UNKNOWN'),
+                                    f"{exec_summary_b.get('risk_assessment', {}).get('critical_issues', 0)} critical issues"
+                                )
+                            
+                            # Performance visualization
+                            score = scorecard.get('overall_score', 0)
+                            if score >= 85:
+                                st.success(f"🏆 **Excellent Performance** ({scorecard.get('performance_grade', 'A')})")
+                            elif score >= 70:
+                                st.info(f"✅ **Good Performance** ({scorecard.get('performance_grade', 'B')})")
+                            elif score >= 60:
+                                st.warning(f"⚠️ **Average Performance** ({scorecard.get('performance_grade', 'C')})")
+                            else:
+                                st.error(f"❌ **Below Average Performance** ({scorecard.get('performance_grade', 'D')})")
+                        
+                        # Financial highlights
+                        if 'financial_highlights' in exec_summary_b:
+                            financial = exec_summary_b['financial_highlights']
+                            st.write("**💰 Financial Highlights:**")
+                            if 'total_value' in financial:
+                                st.write(f"• Total Value: **{financial['total_value']}**")
+                            if 'average_transaction' in financial:
+                                st.write(f"• Average Transaction: **{financial['average_transaction']}**")
+                            if 'value_concentration' in financial:
+                                st.write(f"• Value Distribution: {financial['value_concentration']}")
+                    
+                    # Key Findings Section
+                    st.subheader("🔍 Key Findings")
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.write(f"**{display_sheet_a} Key Insights:**")
+                        key_findings = exec_summary_a.get('key_findings', [])[:5]  # Top 5 findings
+                        for finding in key_findings:
+                            st.write(f"• {finding}")
+                        
+                        if not key_findings:
+                            st.info("No significant findings identified")
+                    
+                    with col2:
+                        st.write(f"**{display_sheet_b} Key Insights:**")
+                        key_findings = exec_summary_b.get('key_findings', [])[:5]  # Top 5 findings
+                        for finding in key_findings:
+                            st.write(f"• {finding}")
+                        
+                        if not key_findings:
+                            st.info("No significant findings identified")
+                    
+                    # Strategic Recommendations Section
+                    st.subheader("💡 Strategic Recommendations")
+                    
+                    # Combine recommendations from both datasets
+                    all_recommendations = []
+                    if 'recommendations' in exec_summary_a:
+                        all_recommendations.extend(exec_summary_a['recommendations'])
+                    if 'recommendations' in exec_summary_b:
+                        all_recommendations.extend(exec_summary_b['recommendations'])
+                    
+                    # Remove duplicates while preserving order
+                    unique_recommendations = []
+                    seen = set()
+                    for rec in all_recommendations:
+                        if rec not in seen:
+                            unique_recommendations.append(rec)
+                            seen.add(rec)
+                    
+                    if unique_recommendations:
+                        for i, recommendation in enumerate(unique_recommendations[:8], 1):  # Top 8 recommendations
+                            st.write(f"**{i}.** {recommendation}")
+                    else:
+                        st.info("No specific recommendations available - ensure data contains business metrics")
+                    
+                    # Executive Summary Export
+                    st.subheader("📥 Executive Report Export")
+                    
+                    # Create executive summary report
+                    exec_report_data = {
+                        'Summary_A': exec_summary_a,
+                        'Summary_B': exec_summary_b,
+                        'Generated_Date': datetime.now().isoformat(),
+                        'Analysis_Type': 'Executive Business Intelligence Summary'
+                    }
+                    
+                    import json
+                    exec_report_json = json.dumps(exec_report_data, indent=2, default=str)
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.download_button(
+                            label="📋 Download Executive Summary (JSON)",
+                            data=exec_report_json,
+                            file_name=f"executive_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                            mime="application/json",
+                            use_container_width=True
+                        )
+                    
+                    with col2:
+                        # Create executive summary text report
+                        text_report = f"""
+EXECUTIVE SUMMARY REPORT
+Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+=== PERFORMANCE SCORECARD ===
+Dataset A Performance: {exec_summary_a.get('performance_scorecard', {}).get('overall_score', 0):.1f}/100 ({exec_summary_a.get('performance_scorecard', {}).get('performance_grade', 'N/A')})
+Dataset B Performance: {exec_summary_b.get('performance_scorecard', {}).get('overall_score', 0):.1f}/100 ({exec_summary_b.get('performance_scorecard', {}).get('performance_grade', 'N/A')})
+
+=== KEY FINDINGS ===
+{chr(10).join(f"• {finding}" for finding in exec_summary_a.get('key_findings', [])[:3])}
+{chr(10).join(f"• {finding}" for finding in exec_summary_b.get('key_findings', [])[:3])}
+
+=== STRATEGIC RECOMMENDATIONS ===
+{chr(10).join(f"{i}. {rec}" for i, rec in enumerate(unique_recommendations[:5], 1))}
+
+=== RISK ASSESSMENT ===
+Dataset A Risk Level: {exec_summary_a.get('risk_assessment', {}).get('overall_risk_level', 'UNKNOWN')}
+Dataset B Risk Level: {exec_summary_b.get('risk_assessment', {}).get('overall_risk_level', 'UNKNOWN')}
+                        """
+                        
+                        st.download_button(
+                            label="📄 Download Executive Summary (TXT)",
+                            data=text_report,
+                            file_name=f"executive_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                            mime="text/plain",
+                            use_container_width=True
+                        )
+            
+            # Data Overview Tab
+            with bi_tabs[1]:
+                st.subheader("📊 Business Overview & Key Insights")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.write(f"**{display_sheet_a} Overview**")
+                    
+                    business_overview_a = bi_analyzer_a.generate_business_overview()
+                    
+                    # Create KPI cards
+                    if 'dataset_info' in business_overview_a:
+                        kpi_metrics = []
+                        dataset_info = business_overview_a['dataset_info']
+                        
+                        # Display key metrics in columns
+                        metric_cols = st.columns(4)
+                        with metric_cols[0]:
+                            st.metric("📊 Total Records", f"{dataset_info.get('total_records', 0):,}")
+                        with metric_cols[1]:
+                            st.metric("📋 Columns", f"{dataset_info.get('total_columns', 0):,}")
+                        with metric_cols[2]:
+                            st.metric("💰 Amount Columns", f"{len(bi_analyzer_a.amount_columns)}")
+                        with metric_cols[3]:
+                            st.metric("🎯 Categories", f"{len(bi_analyzer_a.category_columns)}")
+                    
+                    # Key insights
+                    if 'key_business_insights' in business_overview_a:
+                        st.write("**Key Business Insights:**")
+                        for insight in business_overview_a['key_business_insights']:
+                            st.write(f"• {insight}")
+                    
+                with col2:
+                    st.write(f"**{display_sheet_b} Overview**")
+                    
+                    business_overview_b = bi_analyzer_b.generate_business_overview()
+                    
+                    # Display key metrics in columns
+                    if 'dataset_info' in business_overview_b:
+                        dataset_info = business_overview_b['dataset_info']
+                        
+                        metric_cols = st.columns(4)
+                        with metric_cols[0]:
+                            st.metric("📊 Total Records", f"{dataset_info.get('total_records', 0):,}")
+                        with metric_cols[1]:
+                            st.metric("📋 Columns", f"{dataset_info.get('total_columns', 0):,}")
+                        with metric_cols[2]:
+                            st.metric("💰 Amount Columns", f"{len(bi_analyzer_b.amount_columns)}")
+                        with metric_cols[3]:
+                            st.metric("🎯 Categories", f"{len(bi_analyzer_b.category_columns)}")
+                    
+                    # Key insights
+                    if 'key_business_insights' in business_overview_b:
+                        st.write("**Key Business Insights:**")
+                        for insight in business_overview_b['key_business_insights']:
+                            st.write(f"• {insight}")
+                    
+                # Business recommendations
+                st.subheader("💡 Business Recommendations")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"**Recommendations for {display_sheet_a}:**")
+                    recommendations_a = bi_analyzer_a.generate_business_recommendations()
+                    for rec in recommendations_a:
+                        st.write(f"• {rec}")
+                
+                with col2:
+                    st.write(f"**Recommendations for {display_sheet_b}:**")
+                    recommendations_b = bi_analyzer_b.generate_business_recommendations()
+                    for rec in recommendations_b:
+                        st.write(f"• {rec}")
+                
+            
+            # Sales Performance Tab
+            with bi_tabs[2]:
+                st.subheader("💰 Sales Performance Analysis")
+                
+                # Check if both datasets have sales data
+                if bi_analyzer_a.amount_columns and bi_analyzer_b.amount_columns:
+                        sales_analysis_a = bi_analyzer_a.analyze_sales_performance()
+                        sales_analysis_b = bi_analyzer_b.analyze_sales_performance()
+                        
+                        # Side-by-side sales metrics
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.write(f"**{display_sheet_a} Sales Performance**")
+                            
+                            if sales_analysis_a and not isinstance(sales_analysis_a, dict) or 'error' not in sales_analysis_a:
+                                amount_col = list(sales_analysis_a.keys())[0]
+                                sales_data = sales_analysis_a[amount_col]
+                                
+                                # Sales metrics
+                                st.metric("Total Revenue", f"${sales_data.get('total_revenue', 0):,.2f}")
+                                st.metric("Average Transaction", f"${sales_data.get('average_transaction', 0):,.2f}")
+                                st.metric("Median Transaction", f"${sales_data.get('median_transaction', 0):,.2f}")
+                                
+                                # Revenue trend chart
+                                if 'time_trends' in sales_data:
+                                    fig_trend_a = visualizer.create_revenue_trend_chart(sales_data, amount_col)
+                                    st.plotly_chart(fig_trend_a, use_container_width=True, key="revenue_trend_a")
+                                
+                                # Category performance chart
+                                if 'category_performance' in sales_data:
+                                    fig_cat_a = visualizer.create_category_performance_chart(sales_data, amount_col)
+                                    st.plotly_chart(fig_cat_a, use_container_width=True, key="category_perf_a")
+                            else:
+                                st.info("No sales data available for analysis")
+                        
+                        with col2:
+                            st.write(f"**{display_sheet_b} Sales Performance**")
+                            
+                            if sales_analysis_b and not isinstance(sales_analysis_b, dict) or 'error' not in sales_analysis_b:
+                                amount_col = list(sales_analysis_b.keys())[0]
+                                sales_data = sales_analysis_b[amount_col]
+                                
+                                # Sales metrics
+                                st.metric("Total Revenue", f"${sales_data.get('total_revenue', 0):,.2f}")
+                                st.metric("Average Transaction", f"${sales_data.get('average_transaction', 0):,.2f}")
+                                st.metric("Median Transaction", f"${sales_data.get('median_transaction', 0):,.2f}")
+                                
+                                # Revenue trend chart
+                                if 'time_trends' in sales_data:
+                                    fig_trend_b = visualizer.create_revenue_trend_chart(sales_data, amount_col)
+                                    st.plotly_chart(fig_trend_b, use_container_width=True, key="revenue_trend_b")
+                                
+                                # Category performance chart
+                                if 'category_performance' in sales_data:
+                                    fig_cat_b = visualizer.create_category_performance_chart(sales_data, amount_col)
+                                    st.plotly_chart(fig_cat_b, use_container_width=True, key="category_perf_b")
+                            else:
+                                st.info("No sales data available for analysis")
+                        
+                        # Comparative revenue analysis
+                        if sales_analysis_a and sales_analysis_b:
+                            st.subheader("📊 Comparative Revenue Analysis")
+                            
+                            try:
+                                fig_comparative = visualizer.create_comparative_business_chart(
+                                    sales_analysis_a[list(sales_analysis_a.keys())[0]], 
+                                    sales_analysis_b[list(sales_analysis_b.keys())[0]], 
+                                    display_sheet_a, display_sheet_b, 'revenue_trends'
+                                )
+                                st.plotly_chart(fig_comparative, use_container_width=True, key="comparative_revenue")
+                            except Exception as e:
+                                st.info("Comparative revenue trends not available")
+                    
+                else:
+                    st.info("💡 Sales analysis requires datasets with amount/revenue columns (e.g., 'sales_amount', 'price', 'revenue')")
+            
+            # Customer Analytics Tab
+            with bi_tabs[3]:
+                st.subheader("👥 Customer Analytics")
+                
+                customer_analysis_a = bi_analyzer_a.analyze_customer_insights()
+                customer_analysis_b = bi_analyzer_b.analyze_customer_insights()
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.write(f"**{display_sheet_a} Customer Analysis**")
+                    
+                    # Customer segmentation chart
+                    if 'customer_segmentation' in customer_analysis_a:
+                        fig_seg_a = visualizer.create_customer_segmentation_chart(customer_analysis_a)
+                        st.plotly_chart(fig_seg_a, use_container_width=True, key="customer_seg_a")
+                        
+                        # Customer satisfaction analysis
+                        if 'satisfaction_analysis' in customer_analysis_a:
+                            fig_sat_a = visualizer.create_satisfaction_analysis_chart(customer_analysis_a)
+                            st.plotly_chart(fig_sat_a, use_container_width=True, key="satisfaction_a")
+                    
+                    with col2:
+                        st.write(f"**{display_sheet_b} Customer Analysis**")
+                        
+                        # Customer segmentation chart
+                        if 'customer_segmentation' in customer_analysis_b:
+                            fig_seg_b = visualizer.create_customer_segmentation_chart(customer_analysis_b)
+                            st.plotly_chart(fig_seg_b, use_container_width=True, key="customer_seg_b")
+                        
+                        # Customer satisfaction analysis
+                        if 'satisfaction_analysis' in customer_analysis_b:
+                            fig_sat_b = visualizer.create_satisfaction_analysis_chart(customer_analysis_b)
+                            st.plotly_chart(fig_sat_b, use_container_width=True, key="satisfaction_b")
+                
+            
+            # Product Analysis Tab
+            with bi_tabs[4]:
+                    st.subheader("📦 Product Performance Analysis")
+                    
+                    product_analysis_a = bi_analyzer_a.analyze_product_performance()
+                    product_analysis_b = bi_analyzer_b.analyze_product_performance()
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.write(f"**{display_sheet_a} Product Analysis**")
+                        
+                        if 'message' not in product_analysis_a:
+                            fig_prod_a = visualizer.create_product_performance_chart(product_analysis_a)
+                            st.plotly_chart(fig_prod_a, use_container_width=True, key="product_perf_a")
+                        else:
+                            st.info(product_analysis_a.get('message', 'No product data available'))
+                    
+                    with col2:
+                        st.write(f"**{display_sheet_b} Product Analysis**")
+                        
+                        if 'message' not in product_analysis_b:
+                            fig_prod_b = visualizer.create_product_performance_chart(product_analysis_b)
+                            st.plotly_chart(fig_prod_b, use_container_width=True, key="product_perf_b")
+                        else:
+                            st.info(product_analysis_b.get('message', 'No product data available'))
+                
+            
+            # Financial Ratios Tab (RFP Bayanati Specifications)
+            with bi_tabs[5]:
+                    st.subheader("📊 Financial Ratios & Performance Metrics")
+                    st.markdown("*Based on RFP Bayanati Project specifications including ROE, Liquidity Ratios, Cash Conversion Cycle, and profitability metrics*")
+                    
+                    # Get financial ratios from business overview
+                    business_overview_a = bi_analyzer_a.generate_business_overview()
+                    business_overview_b = bi_analyzer_b.generate_business_overview()
+                    
+                    financial_ratios_a = business_overview_a.get('financial_ratios', {})
+                    financial_ratios_b = business_overview_b.get('financial_ratios', {})
+                    
+                    # Display Financial Ratios Dashboard for Dataset A
+                    if financial_ratios_a and any(financial_ratios_a.get(key, {}) for key in ['liquidity_ratios', 'profitability_ratios']):
+                        st.write(f"**{display_sheet_a} Financial Ratios Dashboard**")
+                        fig_ratios_a = visualizer.create_financial_ratios_dashboard(financial_ratios_a)
+                        st.plotly_chart(fig_ratios_a, use_container_width=True, key="financial_ratios_a")
+                        
+                        # Show insights
+                        if 'insights' in financial_ratios_a:
+                            st.write("**Key Financial Insights:**")
+                            for insight in financial_ratios_a['insights'][:3]:
+                                st.info(f"💡 {insight}")
+                    else:
+                        st.info(f"💡 {display_sheet_a}: Financial ratios require columns like 'assets', 'liabilities', 'revenue', 'net_income', 'equity' for accurate calculation")
+                    
+                    st.divider()
+                    
+                    # Display Financial Ratios Dashboard for Dataset B
+                    if financial_ratios_b and any(financial_ratios_b.get(key, {}) for key in ['liquidity_ratios', 'profitability_ratios']):
+                        st.write(f"**{display_sheet_b} Financial Ratios Dashboard**")
+                        fig_ratios_b = visualizer.create_financial_ratios_dashboard(financial_ratios_b)
+                        st.plotly_chart(fig_ratios_b, use_container_width=True, key="financial_ratios_b")
+                        
+                        # Show insights
+                        if 'insights' in financial_ratios_b:
+                            st.write("**Key Financial Insights:**")
+                            for insight in financial_ratios_b['insights'][:3]:
+                                st.info(f"💡 {insight}")
+                    else:
+                        st.info(f"💡 {display_sheet_b}: Financial ratios require columns like 'assets', 'liabilities', 'revenue', 'net_income', 'equity' for accurate calculation")
+                    
+                    # Financial Performance Comparison
+                    if financial_ratios_a and financial_ratios_b:
+                        st.write("**📊 Financial Performance Comparison**")
+                        
+                        col1, col2, col3 = st.columns(3)
+                        
+                        # ROE Comparison
+                        roe_a = financial_ratios_a.get('profitability_ratios', {}).get('roe', {}).get('value', 0)
+                        roe_b = financial_ratios_b.get('profitability_ratios', {}).get('roe', {}).get('value', 0)
+                        
+                        with col1:
+                            st.metric("ROE Comparison", 
+                                     f"{roe_b:.2f}%", 
+                                     delta=f"{roe_b - roe_a:.2f}%" if roe_a > 0 else None)
+                        
+                        # Current Ratio Comparison
+                        current_a = financial_ratios_a.get('liquidity_ratios', {}).get('current_ratio', {}).get('value', 0)
+                        current_b = financial_ratios_b.get('liquidity_ratios', {}).get('current_ratio', {}).get('value', 0)
+                        
+                        with col2:
+                            st.metric("Current Ratio Comparison", 
+                                     f"{current_b:.2f}", 
+                                     delta=f"{current_b - current_a:.2f}" if current_a > 0 else None)
+                        
+                        # Net Margin Comparison
+                        margin_a = financial_ratios_a.get('profitability_ratios', {}).get('net_profit_margin', {}).get('value', 0)
+                        margin_b = financial_ratios_b.get('profitability_ratios', {}).get('net_profit_margin', {}).get('value', 0)
+                        
+                        with col3:
+                            st.metric("Net Margin Comparison", 
+                                     f"{margin_b:.2f}%", 
+                                     delta=f"{margin_b - margin_a:.2f}%" if margin_a > 0 else None)
+                
+            
+            # Advanced Business KPIs Tab (New)
+            with bi_tabs[6]:
+                    st.subheader("🎯 Advanced Business KPIs")
+                    st.markdown("*Sales Growth, Customer Retention, Employee Turnover, Training ROI, and operational metrics*")
+                    
+                    # Get advanced KPIs
+                    advanced_kpis_a = bi_analyzer_a.analyze_advanced_business_kpis()
+                    advanced_kpis_b = bi_analyzer_b.analyze_advanced_business_kpis()
+                    
+                    # KPI Scorecard for Dataset A
+                    if advanced_kpis_a:
+                        st.write(f"**{display_sheet_a} Business KPIs Scorecard**")
+                        fig_kpi_a = visualizer.create_kpi_scorecard(advanced_kpis_a)
+                        st.plotly_chart(fig_kpi_a, use_container_width=True, key="kpi_scorecard_a")
+                    
+                    st.divider()
+                    
+                    # KPI Scorecard for Dataset B
+                    if advanced_kpis_b:
+                        st.write(f"**{display_sheet_b} Business KPIs Scorecard**")
+                        fig_kpi_b = visualizer.create_kpi_scorecard(advanced_kpis_b)
+                        st.plotly_chart(fig_kpi_b, use_container_width=True, key="kpi_scorecard_b")
+                    
+                    # Detailed KPI Analysis
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.write(f"**{display_sheet_a} KPI Details**")
+                        
+                        # Sales & Marketing KPIs
+                        sales_kpis_a = advanced_kpis_a.get('sales_marketing_kpis', {})
+                        if sales_kpis_a and 'error' not in sales_kpis_a:
+                            st.write("**Sales & Marketing:**")
+                            for kpi_name, kpi_data in sales_kpis_a.items():
+                                if isinstance(kpi_data, dict) and 'value' in kpi_data:
+                                    unit = kpi_data.get('unit', '')
+                                    interpretation = kpi_data.get('interpretation', '')
+                                    st.metric(kpi_name.replace('_', ' ').title(), 
+                                             f"{kpi_data['value']}{unit}",
+                                             help=f"Interpretation: {interpretation}")
+                        
+                        # HR KPIs
+                        hr_kpis_a = advanced_kpis_a.get('hr_kpis', {})
+                        if hr_kpis_a and 'error' not in hr_kpis_a:
+                            st.write("**HR Metrics:**")
+                            for kpi_name, kpi_data in hr_kpis_a.items():
+                                if isinstance(kpi_data, dict) and 'value' in kpi_data:
+                                    unit = kpi_data.get('unit', '')
+                                    interpretation = kpi_data.get('interpretation', '')
+                                    st.metric(kpi_name.replace('_', ' ').title(), 
+                                             f"{kpi_data['value']}{unit}",
+                                             help=f"Interpretation: {interpretation}")
+                    
+                    with col2:
+                        st.write(f"**{display_sheet_b} KPI Details**")
+                        
+                        # Sales & Marketing KPIs
+                        sales_kpis_b = advanced_kpis_b.get('sales_marketing_kpis', {})
+                        if sales_kpis_b and 'error' not in sales_kpis_b:
+                            st.write("**Sales & Marketing:**")
+                            for kpi_name, kpi_data in sales_kpis_b.items():
+                                if isinstance(kpi_data, dict) and 'value' in kpi_data:
+                                    unit = kpi_data.get('unit', '')
+                                    interpretation = kpi_data.get('interpretation', '')
+                                    st.metric(kpi_name.replace('_', ' ').title(), 
+                                             f"{kpi_data['value']}{unit}",
+                                             help=f"Interpretation: {interpretation}")
+                        
+                        # HR KPIs
+                        hr_kpis_b = advanced_kpis_b.get('hr_kpis', {})
+                        if hr_kpis_b and 'error' not in hr_kpis_b:
+                            st.write("**HR Metrics:**")
+                            for kpi_name, kpi_data in hr_kpis_b.items():
+                                if isinstance(kpi_data, dict) and 'value' in kpi_data:
+                                    unit = kpi_data.get('unit', '')
+                                    interpretation = kpi_data.get('interpretation', '')
+                                    st.metric(kpi_name.replace('_', ' ').title(), 
+                                             f"{kpi_data['value']}{unit}",
+                                             help=f"Interpretation: {interpretation}")
+                
+            
+            # Risk & Alerts Tab (New)
+            with bi_tabs[7]:
+                    st.subheader("⚠️ Risk Assessment & Early Warning System")
+                    st.markdown("*Cross-Institution Benchmarking, Sector Analysis, and Early Warning Indicators*")
+                    
+                    # Get benchmarking and alerts
+                    benchmarking_a = bi_analyzer_a.analyze_benchmarking_alerts()
+                    benchmarking_b = bi_analyzer_b.analyze_benchmarking_alerts()
+                    
+                    # Early Warning Indicators
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.write(f"**{display_sheet_a} Alert System**")
+                        
+                        early_warnings_a = benchmarking_a.get('early_warning_indicators', {})
+                        if early_warnings_a:
+                            fig_alerts_a = visualizer.create_early_warning_alerts(early_warnings_a)
+                            st.plotly_chart(fig_alerts_a, use_container_width=True, key="alerts_a")
+                            
+                            # Show critical alerts details
+                            critical_alerts = early_warnings_a.get('critical_alerts', [])
+                            if critical_alerts:
+                                st.error("🚨 **Critical Alerts:**")
+                                for alert in critical_alerts[:3]:
+                                    st.warning(f"**{alert.get('type', 'Alert')}:** {alert.get('message', 'No details')}")
+                                    st.info(f"📋 Recommendation: {alert.get('recommendation', 'Review required')}")
+                    
+                    with col2:
+                        st.write(f"**{display_sheet_b} Alert System**")
+                        
+                        early_warnings_b = benchmarking_b.get('early_warning_indicators', {})
+                        if early_warnings_b:
+                            fig_alerts_b = visualizer.create_early_warning_alerts(early_warnings_b)
+                            st.plotly_chart(fig_alerts_b, use_container_width=True, key="alerts_b")
+                            
+                            # Show critical alerts details
+                            critical_alerts = early_warnings_b.get('critical_alerts', [])
+                            if critical_alerts:
+                                st.error("🚨 **Critical Alerts:**")
+                                for alert in critical_alerts[:3]:
+                                    st.warning(f"**{alert.get('type', 'Alert')}:** {alert.get('message', 'No details')}")
+                                    st.info(f"📋 Recommendation: {alert.get('recommendation', 'Review required')}")
+                    
+                    st.divider()
+                    
+                    # Sector Performance Analysis
+                    sector_analysis_a = benchmarking_a.get('sector_analysis', {})
+                    sector_analysis_b = benchmarking_b.get('sector_analysis', {})
+                    
+                    if sector_analysis_a.get('sector_rankings') or sector_analysis_b.get('sector_rankings'):
+                        st.write("**📊 Sector Performance Analysis**")
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            if sector_analysis_a.get('sector_rankings'):
+                                st.write(f"**{display_sheet_a} Sector Heatmap**")
+                                fig_sector_a = visualizer.create_sector_performance_heatmap(sector_analysis_a)
+                                st.plotly_chart(fig_sector_a, use_container_width=True, key="sector_heatmap_a")
+                        
+                        with col2:
+                            if sector_analysis_b.get('sector_rankings'):
+                                st.write(f"**{display_sheet_b} Sector Heatmap**")
+                                fig_sector_b = visualizer.create_sector_performance_heatmap(sector_analysis_b)
+                                st.plotly_chart(fig_sector_b, use_container_width=True, key="sector_heatmap_b")
+                    
+                    # Risk Assessment Radar Charts
+                    risk_assessment_a = benchmarking_a.get('risk_assessment', {})
+                    risk_assessment_b = benchmarking_b.get('risk_assessment', {})
+                    
+                    if risk_assessment_a.get('risk_factors') or risk_assessment_b.get('risk_factors'):
+                        st.write("**🎯 Risk Assessment Overview**")
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            if risk_assessment_a.get('risk_factors'):
+                                st.write(f"**{display_sheet_a} Risk Profile**")
+                                fig_risk_a = visualizer.create_risk_assessment_radar(risk_assessment_a)
+                                st.plotly_chart(fig_risk_a, use_container_width=True, key="risk_radar_a")
+                                
+                                risk_level = risk_assessment_a.get('risk_level', 'Unknown')
+                                risk_score = risk_assessment_a.get('risk_score', 0)
+                                st.metric("Overall Risk Level", risk_level, f"Score: {risk_score}")
+                        
+                        with col2:
+                            if risk_assessment_b.get('risk_factors'):
+                                st.write(f"**{display_sheet_b} Risk Profile**")
+                                fig_risk_b = visualizer.create_risk_assessment_radar(risk_assessment_b)
+                                st.plotly_chart(fig_risk_b, use_container_width=True, key="risk_radar_b")
+                                
+                                risk_level = risk_assessment_b.get('risk_level', 'Unknown')
+                                risk_score = risk_assessment_b.get('risk_score', 0)
+                                st.metric("Overall Risk Level", risk_level, f"Score: {risk_score}")
+                    
+                    # Data Quality & Governance
+                    governance_a = benchmarking_a.get('performance_benchmarks', {})
+                    governance_b = benchmarking_b.get('performance_benchmarks', {})
+                    
+                    if governance_a or governance_b:
+                        st.write("**📊 Data Quality & Governance Metrics**")
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            if governance_a.get('data_quality'):
+                                st.write(f"**{display_sheet_a} Data Quality**")
+                                dq_score = governance_a['data_quality'].get('completeness_score', 0)
+                                st.metric("Data Completeness", f"{dq_score:.1f}%")
+                                
+                                tier = governance_a['data_quality'].get('benchmark_tier', 'Unknown')
+                                st.info(f"Quality Tier: {tier}")
+                        
+                        with col2:
+                            if governance_b.get('data_quality'):
+                                st.write(f"**{display_sheet_b} Data Quality**")
+                                dq_score = governance_b['data_quality'].get('completeness_score', 0)
+                                st.metric("Data Completeness", f"{dq_score:.1f}%")
+                                
+                                tier = governance_b['data_quality'].get('benchmark_tier', 'Unknown')
+                                st.info(f"Quality Tier: {tier}")
+                
+            
+            # Comparative Analysis Tab
+            with bi_tabs[8]:
+                    st.subheader("⚠️ Risk Assessment & Early Warning Systems")
+                    st.markdown("**Comprehensive risk analysis with predictive indicators and early warning signals**")
+                    
+                    try:
+                        # Get risk assessment from both datasets
+                        risk_analysis_a = bi_analyzer_a.perform_risk_analysis() if hasattr(bi_analyzer_a, 'perform_risk_analysis') else {}
+                        risk_analysis_b = bi_analyzer_b.perform_risk_analysis() if hasattr(bi_analyzer_b, 'perform_risk_analysis') else {}
+                        
+                        # Financial Health Indicators
+                        st.subheader("💊 Financial Health Indicators")
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.write(f"**{display_sheet_a} Risk Profile**")
+                            
+                            # Create risk indicators based on available data
+                            df_a = comparator.df_a
+                            numeric_cols_a = df_a.select_dtypes(include=[np.number]).columns
+                            
+                            if len(numeric_cols_a) > 0:
+                                # Calculate risk indicators
+                                volatility = df_a[numeric_cols_a].std().mean() if len(numeric_cols_a) > 0 else 0
+                                trend_stability = 1 - (df_a[numeric_cols_a].var().mean() / (df_a[numeric_cols_a].mean().mean() + 1))
+                                data_quality = (df_a.notna().sum().sum() / (len(df_a) * len(df_a.columns))) * 100
+                                
+                                # Risk level calculation
+                                risk_score = min(100, max(0, (volatility * 0.3 + (1-trend_stability) * 0.4 + (100-data_quality) * 0.3)))
+                                risk_level = "Low" if risk_score < 30 else "Medium" if risk_score < 70 else "High"
+                                risk_color = "🟢" if risk_score < 30 else "🟡" if risk_score < 70 else "🔴"
+                                
+                                st.metric("Overall Risk Score", f"{risk_score:.1f}/100", f"{risk_color} {risk_level}")
+                                st.metric("Data Quality", f"{data_quality:.1f}%")
+                                st.metric("Trend Stability", f"{trend_stability*100:.1f}%")
+                            else:
+                                st.info("Insufficient numeric data for risk assessment")
+                        
+                        with col2:
+                            st.write(f"**{display_sheet_b} Risk Profile**")
+                            
+                            df_b = comparator.df_b
+                            numeric_cols_b = df_b.select_dtypes(include=[np.number]).columns
+                            
+                            if len(numeric_cols_b) > 0:
+                                # Calculate risk indicators
+                                volatility = df_b[numeric_cols_b].std().mean() if len(numeric_cols_b) > 0 else 0
+                                trend_stability = 1 - (df_b[numeric_cols_b].var().mean() / (df_b[numeric_cols_b].mean().mean() + 1))
+                                data_quality = (df_b.notna().sum().sum() / (len(df_b) * len(df_b.columns))) * 100
+                                
+                                # Risk level calculation
+                                risk_score = min(100, max(0, (volatility * 0.3 + (1-trend_stability) * 0.4 + (100-data_quality) * 0.3)))
+                                risk_level = "Low" if risk_score < 30 else "Medium" if risk_score < 70 else "High"
+                                risk_color = "🟢" if risk_score < 30 else "🟡" if risk_score < 70 else "🔴"
+                                
+                                st.metric("Overall Risk Score", f"{risk_score:.1f}/100", f"{risk_color} {risk_level}")
+                                st.metric("Data Quality", f"{data_quality:.1f}%")
+                                st.metric("Trend Stability", f"{trend_stability*100:.1f}%")
+                            else:
+                                st.info("Insufficient numeric data for risk assessment")
+                        
+                        # Early Warning Indicators
+                        st.subheader("🚨 Early Warning Indicators")
+                        
+                        warning_indicators = []
+                        
+                        # Check for common risk patterns
+                        for i, (df, name) in enumerate([(comparator.df_a, display_sheet_a), (comparator.df_b, display_sheet_b)]):
+                            numeric_cols = df.select_dtypes(include=[np.number]).columns
+                            
+                            if len(numeric_cols) > 0:
+                                # Missing data warning
+                                missing_pct = (df.isnull().sum().sum() / (len(df) * len(df.columns))) * 100
+                                if missing_pct > 10:
+                                    warning_indicators.append(f"⚠️ {name}: High missing data rate ({missing_pct:.1f}%)")
+                                
+                                # Outlier detection
+                                for col in numeric_cols[:3]:  # Check first 3 numeric columns
+                                    data = df[col].dropna()
+                                    if len(data) > 0:
+                                        Q1 = data.quantile(0.25)
+                                        Q3 = data.quantile(0.75)
+                                        IQR = Q3 - Q1
+                                        outliers = data[(data < Q1 - 1.5*IQR) | (data > Q3 + 1.5*IQR)]
+                                        if len(outliers) > len(data) * 0.1:  # More than 10% outliers
+                                            warning_indicators.append(f"📊 {name}: Potential data quality issues in {col}")
+                        
+                        if warning_indicators:
+                            for warning in warning_indicators:
+                                st.warning(warning)
+                        else:
+                            st.success("🟢 No significant risk indicators detected")
+                        
+                        # Risk Mitigation Recommendations
+                        st.subheader("💡 Risk Mitigation Recommendations")
+                        
+                        recommendations = [
+                            "🔍 **Data Quality**: Implement regular data validation and cleansing procedures",
+                            "📊 **Monitoring**: Set up automated alerts for key performance indicators",
+                            "🔄 **Backup**: Maintain data backup and recovery procedures",
+                            "📈 **Trending**: Monitor data trends for early warning signals",
+                            "🛡️ **Validation**: Implement data integrity checks and validation rules"
+                        ]
+                        
+                        for rec in recommendations:
+                            st.markdown(rec)
+                    
+                    except Exception as e:
+                        st.error(f"Risk assessment error: {str(e)}")
+                        st.info("💡 Risk assessment requires numeric data for comprehensive analysis")
+            
+            # Comparative Business Analysis Tab
+            with bi_tabs[9]:
+                    st.subheader("🔄 Comparative Business Analysis")
+                    
+                    # Perform comparative analysis
+                    try:
+                        comparison_analysis = bi_analyzer_a.compare_business_performance(bi_analyzer_b)
+                        
+                        # Performance summary
+                        if 'performance_summary' in comparison_analysis:
+                            st.write("**📈 Performance Summary:**")
+                            for summary in comparison_analysis['performance_summary']:
+                                st.write(f"• {summary}")
+                        
+                        # Revenue comparison
+                        if 'revenue_comparison' in comparison_analysis:
+                            st.subheader("💰 Revenue Comparison")
+                            revenue_comp = comparison_analysis['revenue_comparison']
+                            
+                            if 'message' not in revenue_comp:
+                                col1, col2, col3 = st.columns(3)
+                                
+                                with col1:
+                                    total_rev = revenue_comp.get('total_revenue', {})
+                                    st.metric(
+                                        "Revenue Growth", 
+                                        f"{total_rev.get('growth_rate', 0):+.1f}%",
+                                        f"${total_rev.get('difference', 0):+,.2f}"
+                                    )
+                                
+                                with col2:
+                                    avg_trans = revenue_comp.get('average_transaction', {})
+                                    st.metric(
+                                        "Avg Transaction Growth", 
+                                        f"{avg_trans.get('improvement', 0):+.1f}%",
+                                        f"${avg_trans.get('difference', 0):+,.2f}"
+                                    )
+                                
+                                with col3:
+                                    dataset_comp = comparison_analysis.get('dataset_comparison', {})
+                                    differences = dataset_comp.get('differences', {})
+                                    st.metric(
+                                        "Data Volume Growth", 
+                                        f"{differences.get('growth_rate', 0):+.1f}%",
+                                        f"{differences.get('row_difference', 0):+,} records"
+                                    )
+                        
+                        # Customer comparison
+                        if 'customer_comparison' in comparison_analysis:
+                            st.subheader("👥 Customer Growth")
+                            customer_comp = comparison_analysis['customer_comparison']
+                            
+                            if 'message' not in customer_comp and 'customer_count' in customer_comp:
+                                customer_data = customer_comp['customer_count']
+                                st.metric(
+                                    "Customer Base Growth",
+                                    f"{customer_data.get('growth_rate', 0):+.1f}%",
+                                    f"{customer_data.get('difference', 0):+,} customers"
+                                )
+                    
+                    except Exception as e:
+                        st.error(f"Comparative analysis error: {str(e)}")
+                        st.info("💡 Comparative analysis requires compatible datasets with similar business metrics")
+            
+            # Interactive Dashboard Tab
+            with bi_tabs[10]:
+                    st.subheader("📈 Interactive Dashboard")
+                    st.markdown("Create interactive visualizations with drill-down capabilities and export options")
+                    
+                    try:
+                        # Dataset selection
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            dataset_choice = st.selectbox(
+                                "Select Dataset:",
+                                [display_sheet_a, display_sheet_b],
+                                key="interactive_dataset"
+                            )
+                        
+                        with col2:
+                            chart_type = st.selectbox(
+                                "Select Chart Type:",
+                                ["Interactive Bar Chart", "Drill-Down Scatter Plot", "Time Series Analysis", "Category Comparison"],
+                                key="interactive_chart_type"
+                            )
+                        
+                        # Get selected dataset
+                        selected_df = comparator.df_a if dataset_choice == display_sheet_a else comparator.df_b
+                        available_columns = list(selected_df.columns)
+                        
+                        if available_columns:
+                            # Column mapping interface
+                            st.markdown("#### 🎯 Data Mapping")
+                            col1, col2, col3 = st.columns(3)
+                            
+                            with col1:
+                                x_column = st.selectbox(
+                                    "X-Axis Column:",
+                                    available_columns,
+                                    key="interactive_x_column"
+                                )
+                            
+                            with col2:
+                                numeric_columns = [col for col in available_columns if selected_df[col].dtype in ['int64', 'float64']]
+                                y_column = st.selectbox(
+                                    "Y-Axis Column:",
+                                    numeric_columns if numeric_columns else available_columns,
+                                    key="interactive_y_column"
+                                )
+                            
+                            with col3:
+                                color_column = st.selectbox(
+                                    "Color/Group Column (Optional):",
+                                    ["None"] + available_columns,
+                                    key="interactive_color_column"
+                                )
+                            
+                            # Export format selection
+                            export_format = st.selectbox(
+                                "Export Format:",
+                                ["PNG", "PDF", "HTML", "SVG"],
+                                key="export_format"
+                            )
+                            
+                            # Chart generation
+                            if st.button("🎨 Generate Interactive Chart", key="generate_interactive"):
+                                with st.spinner("Creating interactive visualization..."):
+                                    try:
+                                        from analysis.visualization import InteractiveDashboard, ChartExporter
+                                        
+                                        # Initialize dashboard with both datasets
+                                        dashboard = InteractiveDashboard(
+                                            comparator.df_a, 
+                                            comparator.df_b,
+                                            display_sheet_a,
+                                            display_sheet_b
+                                        )
+                                        
+                                        # Prepare data
+                                        chart_data = selected_df.copy()
+                                        color_col = None if color_column == "None" else color_column
+                                        
+                                        # Create chart based on selection
+                                        if chart_type == "Interactive Bar Chart":
+                                            fig = dashboard.create_single_dataset_bar_chart(
+                                                chart_data, x_column, y_column, color_col
+                                            )
+                                            st.plotly_chart(fig, use_container_width=True)
+                                            
+                                        elif chart_type == "Drill-Down Scatter Plot":
+                                            fig = dashboard.create_single_dataset_scatter(
+                                                chart_data, x_column, y_column, color_col
+                                            )
+                                            st.plotly_chart(fig, use_container_width=True)
+                                            
+                                        elif chart_type == "Time Series Analysis":
+                                            # Check if x_column can be converted to datetime
+                                            try:
+                                                chart_data_time = chart_data.copy()
+                                                chart_data_time[x_column] = pd.to_datetime(chart_data_time[x_column], errors='coerce')
+                                                chart_data_time = chart_data_time.dropna(subset=[x_column])
+                                                
+                                                if len(chart_data_time) > 0:
+                                                    # Use scatter plot for time series with line mode
+                                                    fig = dashboard.create_single_dataset_scatter(
+                                                        chart_data_time, x_column, y_column, color_col
+                                                    )
+                                                    # Update to line chart for time series
+                                                    for trace in fig.data:
+                                                        trace.mode = 'lines+markers'
+                                                    fig.update_layout(title=f"Time Series: {y_column} over {x_column}")
+                                                    fig.update_xaxes(title="Date")
+                                                    st.plotly_chart(fig, use_container_width=True)
+                                                else:
+                                                    st.error("No valid date values found in selected X-axis column")
+                                            except Exception as date_error:
+                                                st.error(f"Date conversion error: {str(date_error)}")
+                                        
+                                        elif chart_type == "Category Comparison":
+                                            # Use bar chart for category comparison
+                                            try:
+                                                fig = dashboard.create_single_dataset_bar_chart(
+                                                    chart_data, x_column, y_column, color_col
+                                                )
+                                                fig.update_layout(title=f"Category Comparison: {y_column} by {x_column}")
+                                                st.plotly_chart(fig, use_container_width=True)
+                                            except Exception as group_error:
+                                                st.error(f"Category comparison error: {str(group_error)}")
+                                        
+                                        # Export options
+                                        st.markdown("#### 📥 Export Options")
+                                        col1, col2 = st.columns(2)
+                                        
+                                        with col1:
+                                            if st.button(f"📊 Export Chart as {export_format}", key="export_chart"):
+                                                try:
+                                                    # Export chart with data
+                                                    export_data = dashboard.export_chart_with_data(
+                                                        fig, chart_data, export_format.lower()
+                                                    )
+                                                    
+                                                    if export_format in ["PNG", "PDF", "SVG"]:
+                                                        st.download_button(
+                                                            label=f"Download {export_format}",
+                                                            data=export_data,
+                                                            file_name=f"interactive_chart_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{export_format.lower()}",
+                                                            mime=f"image/{export_format.lower()}" if export_format != "PDF" else "application/pdf"
+                                                        )
+                                                    else:  # HTML
+                                                        st.download_button(
+                                                            label="Download HTML",
+                                                            data=export_data,
+                                                            file_name=f"interactive_chart_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html",
+                                                            mime="text/html"
+                                                        )
+                                                    
+                                                    st.success(f"Chart exported as {export_format}!")
+                                                
+                                                except Exception as e:
+                                                    st.error(f"Export error: {str(e)}")
+                                        
+                                        with col2:
+                                            if st.button("📋 Export Data as CSV", key="export_data"):
+                                                csv_data = chart_data.to_csv(index=False)
+                                                st.download_button(
+                                                    label="Download CSV Data",
+                                                    data=csv_data,
+                                                    file_name=f"chart_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                                    mime="text/csv"
+                                                )
+                                                st.success("Data exported as CSV!")
+                                        
+                                        # Chart insights
+                                        st.markdown("#### 💡 Chart Insights")
+                                        insights_col1, insights_col2 = st.columns(2)
+                                        
+                                        with insights_col1:
+                                            st.metric(
+                                                "Data Points",
+                                                f"{len(chart_data):,}",
+                                                help="Total number of data points in the visualization"
+                                            )
+                                            
+                                            # Calculate basic statistics for numeric columns
+                                            if y_column in chart_data.columns and chart_data[y_column].dtype in ['int64', 'float64']:
+                                                avg_value = chart_data[y_column].mean()
+                                                st.metric(
+                                                    f"Average {y_column}",
+                                                    f"{avg_value:,.2f}",
+                                                    help=f"Mean value of {y_column}"
+                                                )
+                                        
+                                        with insights_col2:
+                                            if color_col and color_col in chart_data.columns:
+                                                unique_categories = chart_data[color_col].nunique()
+                                                st.metric(
+                                                    f"Unique {color_col}",
+                                                    f"{unique_categories:,}",
+                                                    help=f"Number of unique categories in {color_col}"
+                                                )
+                                            
+                                            if y_column in chart_data.columns and chart_data[y_column].dtype in ['int64', 'float64']:
+                                                max_value = chart_data[y_column].max()
+                                                st.metric(
+                                                    f"Maximum {y_column}",
+                                                    f"{max_value:,.2f}",
+                                                    help=f"Highest value in {y_column}"
+                                                )
+                                    
+                                    except Exception as e:
+                                        st.error(f"Interactive dashboard error: {str(e)}")
+                                        st.info("💡 Please ensure your data contains the selected columns and appropriate data types")
+                        
+                        else:
+                            st.info("📊 No columns available in the selected dataset")
+                            st.markdown("""
+                            **Interactive Dashboard Features:**
+                            - 🎨 **Interactive Charts**: Bar charts, scatter plots, time series
+                            - 🔍 **Drill-Down Capabilities**: Click on chart elements for detailed views
+                            - 📥 **Multiple Export Formats**: PNG, PDF, HTML, SVG
+                            - 📊 **Real-Time Insights**: Dynamic metrics and statistics
+                            - 🎯 **Flexible Data Mapping**: Choose any columns for visualization
+                            - 📋 **Data Export**: Download both charts and underlying data
+                            """)
+                    
+                    except Exception as e:
+                        st.error(f"Interactive Dashboard error: {str(e)}")
+                        st.info("💡 Interactive Dashboard requires processed data with appropriate column types")
+        else:
+            st.info("📁 Please upload and load data files in the sidebar to enable Business Intelligence analysis")
+            st.markdown("""
+            **Business Intelligence Features:**
+            - 📊 Financial Ratio Analysis (ROE, ROA, Current Ratio, etc.)
+            - 📈 Advanced KPIs (Sales growth, Customer retention, etc.) 
+            - 👥 Customer Analytics (Segmentation, Lifetime Value, etc.)
+            - ⚠️ Risk Assessment & Early Warning Systems
+            - 💰 Comprehensive Financial Analysis
+            """)
+    
+    # DATA ANALYSIS TAB
+    with main_tabs[3]:
+        st.header("🔍 Advanced Data Analysis")
+        st.markdown("**Statistical analysis, data quality assessment, and insights**")
+        
+        if comparator.df_a is not None or comparator.df_b is not None:
+            # Show data analysis options
+            analysis_tabs = st.tabs(["📊 Statistical Analysis", "🔍 Data Quality", "📈 Trends & Patterns"])
+            
+            with analysis_tabs[0]:
+                st.subheader("📊 Statistical Analysis")
+                st.info("Coming soon: Descriptive statistics, correlation analysis, and distribution analysis")
+            
+            with analysis_tabs[1]:
+                st.subheader("🔍 Data Quality Assessment")  
+                st.info("Coming soon: Missing data analysis, duplicate detection, and data validation")
+            
+            with analysis_tabs[2]:
+                st.subheader("📈 Trends & Patterns")
+                st.info("Coming soon: Trend analysis, seasonal patterns, and anomaly detection")
+        else:
+            st.info("📁 Please upload data files in the sidebar to enable advanced data analysis")
+    
+    # REPORTS & EXPORT TAB
+    with main_tabs[4]:
+        st.header("📋 Reports & Export")
+        st.markdown("**Generate and download comprehensive reports**")
+        
+        if hasattr(comparator, 'results') and comparator.results:
+            # Export functionality
+            st.subheader("📥 Export Results")
             
             col1, col2 = st.columns([2, 1])
             with col1:
@@ -4124,6 +6761,33 @@ def main():
                         mime="text/csv",
                         use_container_width=True
                     )
+        else:
+            st.info("🔄 No results available for export. Please run a comparison analysis first.")
+            st.markdown("""
+            **Available Export Options:**
+            - 📊 Complete Excel report with multiple sheets
+            - 📈 Individual CSV files for each result category  
+            - 💼 Executive summary reports
+            - 📋 Data quality assessment reports
+            """)
+    
+    # Footer information
+    st.divider()
+    with st.expander("ℹ️ About this Platform", expanded=False):
+        st.markdown("""
+        **Excel Comparison & Business Intelligence Platform v2.0**
+        
+        This comprehensive platform combines advanced Excel comparison capabilities with 
+        business intelligence analysis following RFP Bayanati specifications.
+        
+        **Key Capabilities:**
+        - 🔍 Advanced fuzzy matching algorithms
+        - 📊 Comprehensive business intelligence analysis  
+        - 📈 Financial ratio calculations (ROE, ROA, liquidity ratios)
+        - 👥 Customer analytics and segmentation
+        - 📋 Professional reporting and export
+        - ⚠️ Risk assessment and early warning systems
+        """)
 
 if __name__ == "__main__":
     main()

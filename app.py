@@ -1637,6 +1637,950 @@ class ExcelComparator:
                 failed_df = pd.DataFrame(failed_data)
                 st.dataframe(failed_df, hide_index=True, use_container_width=True)
 
+    def perform_consolidation(self, uploaded_file, sheets_to_consolidate: List[str],
+                            consolidation_strategy: str, include_source_column: bool,
+                            handle_duplicates: str, missing_data_strategy: str,
+                            validate_schemas: bool, show_consolidation_report: bool) -> Dict:
+        """Perform cross-sheet data consolidation with multiple strategies"""
+        
+        # Initialize progress tracking
+        total_sheets = len(sheets_to_consolidate)
+        start_time = time.time()
+        
+        # Create progress containers
+        progress_container = st.container()
+        with progress_container:
+            st.subheader("🔗 Processing Consolidation")
+            
+            # Main progress bar
+            main_progress = st.progress(0, text="Initializing consolidation...")
+            
+            # Status metrics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                processed_metric = st.metric("Processed", "0", f"of {total_sheets:,} sheets")
+            with col2:
+                rows_metric = st.metric("📊 Total Rows", "0")
+            with col3:
+                columns_metric = st.metric("📋 Unique Columns", "0")
+            with col4:
+                time_metric = st.metric("⏱️ Time", "0s")
+            
+            # Live status text
+            status_text = st.empty()
+        
+        consolidation_results = {
+            'strategy': consolidation_strategy,
+            'consolidated_data': None,
+            'schema_analysis': {},
+            'processing_report': {},
+            'quality_metrics': {},
+            'sheets_processed': [],
+            'errors': []
+        }
+        
+        try:
+            # Phase 1: Load and analyze all sheets
+            main_progress.progress(0.1, text="📚 Loading and analyzing sheets...")
+            status_text.info("Loading sheets and analyzing structures...")
+            
+            sheet_data = {}
+            all_columns = set()
+            total_rows = 0
+            
+            for i, sheet_name in enumerate(sheets_to_consolidate):
+                # Update progress
+                progress = 0.1 + (i / total_sheets) * 0.3
+                main_progress.progress(progress, text=f"Loading {sheet_name}...")
+                
+                # Load sheet
+                df = self.read_sheet(uploaded_file, sheet_name)
+                if df is not None:
+                    sheet_data[sheet_name] = df
+                    all_columns.update(df.columns.tolist())
+                    total_rows += len(df)
+                    
+                    # Update metrics
+                    processed_metric.metric("Processed", f"{i+1}", f"of {total_sheets:,} sheets")
+                    rows_metric.metric("📊 Total Rows", f"{total_rows:,}")
+                    columns_metric.metric("📋 Unique Columns", f"{len(all_columns):,}")
+                    
+                    consolidation_results['sheets_processed'].append({
+                        'name': sheet_name,
+                        'rows': len(df),
+                        'columns': len(df.columns),
+                        'column_names': df.columns.tolist()
+                    })
+                else:
+                    consolidation_results['errors'].append(f"Could not load sheet: {sheet_name}")
+            
+            if not sheet_data:
+                raise Exception("No sheets could be loaded successfully")
+            
+            # Phase 2: Schema Analysis
+            main_progress.progress(0.4, text="🔍 Analyzing schemas and data compatibility...")
+            status_text.info("Performing schema analysis and compatibility checks...")
+            
+            schema_analysis = self._analyze_consolidation_schemas(sheet_data, validate_schemas)
+            consolidation_results['schema_analysis'] = schema_analysis
+            
+            # Phase 3: Consolidation based on strategy
+            main_progress.progress(0.6, text=f"🔗 Consolidating data using {consolidation_strategy}...")
+            
+            if consolidation_strategy == "Union (Combine all data)":
+                consolidated_df = self._perform_union_consolidation(
+                    sheet_data, include_source_column, handle_duplicates, missing_data_strategy
+                )
+            elif consolidation_strategy == "Key-based Merge":
+                consolidated_df = self._perform_keybased_consolidation(
+                    sheet_data, schema_analysis, include_source_column
+                )
+            else:  # Schema Analysis Only
+                consolidated_df = self._perform_schema_analysis_only(sheet_data, schema_analysis)
+            
+            consolidation_results['consolidated_data'] = consolidated_df
+            
+            # Phase 4: Generate quality report
+            main_progress.progress(0.8, text="📊 Generating consolidation report...")
+            
+            if show_consolidation_report:
+                quality_metrics = self._generate_consolidation_report(
+                    sheet_data, consolidated_df, schema_analysis, consolidation_strategy
+                )
+                consolidation_results['quality_metrics'] = quality_metrics
+            
+            # Phase 5: Display results
+            main_progress.progress(1.0, text="✅ Consolidation completed successfully!")
+            
+            # Final metrics update
+            total_time = time.time() - start_time
+            final_rows = len(consolidated_df) if consolidated_df is not None else 0
+            final_cols = len(consolidated_df.columns) if consolidated_df is not None else 0
+            
+            processed_metric.metric("Processed", f"{len(sheet_data)}", "Complete!")
+            rows_metric.metric("📊 Final Rows", f"{final_rows:,}")
+            columns_metric.metric("📋 Final Columns", f"{final_cols:,}")
+            time_metric.metric("⏱️ Total Time", f"{total_time:.1f}s")
+            
+            status_text.success(
+                f"🎉 Consolidation complete! "
+                f"Combined {len(sheet_data)} sheets into {final_rows:,} rows × {final_cols:,} columns | "
+                f"Total time: {total_time:.1f}s"
+            )
+            
+            # Brief pause to show completion
+            time.sleep(1.5)
+            
+            # Show consolidated results
+            if consolidated_df is not None:
+                self.show_consolidation_results(consolidation_results)
+            
+            return consolidation_results
+            
+        except Exception as e:
+            main_progress.progress(0, text="❌ Consolidation failed!")
+            status_text.error(f"Error during consolidation: {str(e)}")
+            consolidation_results['errors'].append(str(e))
+            raise e
+
+    def _analyze_consolidation_schemas(self, sheet_data: Dict, validate_schemas: bool) -> Dict:
+        """Analyze schemas across sheets for consolidation compatibility"""
+        
+        schema_analysis = {
+            'common_columns': [],
+            'unique_columns': {},
+            'column_types': {},
+            'compatibility_issues': [],
+            'recommendations': []
+        }
+        
+        # Find all unique columns across sheets
+        all_columns = set()
+        sheet_columns = {}
+        
+        for sheet_name, df in sheet_data.items():
+            sheet_columns[sheet_name] = df.columns.tolist()
+            all_columns.update(df.columns)
+        
+        # Identify common vs unique columns
+        common_cols = set(sheet_columns[list(sheet_data.keys())[0]])
+        for sheet_name, cols in sheet_columns.items():
+            common_cols = common_cols.intersection(set(cols))
+        
+        schema_analysis['common_columns'] = list(common_cols)
+        
+        # Find unique columns per sheet
+        for sheet_name, cols in sheet_columns.items():
+            unique_cols = set(cols) - common_cols
+            if unique_cols:
+                schema_analysis['unique_columns'][sheet_name] = list(unique_cols)
+        
+        # Analyze data types for common columns if validation enabled
+        if validate_schemas and common_cols:
+            for col in common_cols:
+                col_types = {}
+                for sheet_name, df in sheet_data.items():
+                    if col in df.columns:
+                        col_types[sheet_name] = str(df[col].dtype)
+                
+                schema_analysis['column_types'][col] = col_types
+                
+                # Check for type inconsistencies
+                unique_types = set(col_types.values())
+                if len(unique_types) > 1:
+                    schema_analysis['compatibility_issues'].append({
+                        'column': col,
+                        'issue': 'Data type mismatch',
+                        'details': col_types
+                    })
+        
+        # Generate recommendations
+        if len(common_cols) == 0:
+            schema_analysis['recommendations'].append("No common columns found. Consider Union strategy with source tracking.")
+        elif len(common_cols) < len(all_columns) * 0.5:
+            schema_analysis['recommendations'].append("Few common columns. Union strategy recommended over Key-based merge.")
+        else:
+            schema_analysis['recommendations'].append("Good column alignment. Key-based merge is viable.")
+        
+        return schema_analysis
+
+    def _perform_union_consolidation(self, sheet_data: Dict, include_source_column: bool,
+                                   handle_duplicates: str, missing_data_strategy: str) -> pd.DataFrame:
+        """Perform union-based consolidation (stack all data)"""
+        
+        consolidated_dfs = []
+        
+        for sheet_name, df in sheet_data.items():
+            df_copy = df.copy()
+            
+            # Add source column if requested
+            if include_source_column:
+                df_copy['_source_sheet'] = sheet_name
+            
+            consolidated_dfs.append(df_copy)
+        
+        # Combine all dataframes
+        if missing_data_strategy == "Fill with blanks":
+            consolidated_df = pd.concat(consolidated_dfs, ignore_index=True, sort=False)
+        elif missing_data_strategy == "Skip rows":
+            # Only keep rows that have data in common columns
+            consolidated_df = pd.concat(consolidated_dfs, ignore_index=True, join='inner', sort=False)
+        else:  # Use default value
+            consolidated_df = pd.concat(consolidated_dfs, ignore_index=True, sort=False)
+            consolidated_df = consolidated_df.fillna('DEFAULT_VALUE')
+        
+        # Handle duplicates
+        if handle_duplicates == "Remove duplicates":
+            original_count = len(consolidated_df)
+            consolidated_df = consolidated_df.drop_duplicates()
+            st.info(f"Removed {original_count - len(consolidated_df):,} duplicate rows")
+        elif handle_duplicates == "Mark duplicates":
+            consolidated_df['_is_duplicate'] = consolidated_df.duplicated(keep=False)
+        
+        return consolidated_df
+
+    def _perform_keybased_consolidation(self, sheet_data: Dict, schema_analysis: Dict,
+                                      include_source_column: bool) -> pd.DataFrame:
+        """Perform key-based merge consolidation"""
+        
+        common_columns = schema_analysis['common_columns']
+        
+        if not common_columns:
+            st.warning("No common columns found. Falling back to Union consolidation.")
+            return self._perform_union_consolidation(sheet_data, include_source_column, "Keep all", "Fill with blanks")
+        
+        # Use the first common column as key (or let user select)
+        key_column = common_columns[0]
+        st.info(f"Using '{key_column}' as merge key column")
+        
+        # Start with first sheet
+        sheet_names = list(sheet_data.keys())
+        consolidated_df = sheet_data[sheet_names[0]].copy()
+        
+        if include_source_column:
+            consolidated_df[f'_sources'] = sheet_names[0]
+        
+        # Merge with remaining sheets
+        for sheet_name in sheet_names[1:]:
+            df_to_merge = sheet_data[sheet_name]
+            
+            # Perform left join
+            merged_df = consolidated_df.merge(
+                df_to_merge, 
+                on=key_column, 
+                how='outer', 
+                suffixes=('', f'_from_{sheet_name}')
+            )
+            
+            if include_source_column:
+                # Update sources column
+                merged_df[f'_sources'] = merged_df[f'_sources'].fillna('') + f';{sheet_name}'
+                merged_df[f'_sources'] = merged_df[f'_sources'].str.strip(';')
+            
+            consolidated_df = merged_df
+        
+        return consolidated_df
+
+    def _perform_schema_analysis_only(self, sheet_data: Dict, schema_analysis: Dict) -> pd.DataFrame:
+        """Create analysis-only output showing schema comparison"""
+        
+        analysis_data = []
+        
+        for sheet_name, df in sheet_data.items():
+            for col in df.columns:
+                analysis_data.append({
+                    'Sheet': sheet_name,
+                    'Column': col,
+                    'Data_Type': str(df[col].dtype),
+                    'Non_Null_Count': df[col].count(),
+                    'Null_Count': df[col].isnull().sum(),
+                    'Unique_Values': df[col].nunique(),
+                    'Sample_Value': str(df[col].dropna().iloc[0]) if len(df[col].dropna()) > 0 else 'N/A'
+                })
+        
+        return pd.DataFrame(analysis_data)
+
+    def _generate_consolidation_report(self, sheet_data: Dict, consolidated_df: pd.DataFrame,
+                                     schema_analysis: Dict, strategy: str) -> Dict:
+        """Generate comprehensive consolidation quality report"""
+        
+        total_input_rows = sum(len(df) for df in sheet_data.values())
+        final_rows = len(consolidated_df) if consolidated_df is not None else 0
+        
+        quality_metrics = {
+            'input_summary': {
+                'total_sheets': len(sheet_data),
+                'total_input_rows': total_input_rows,
+                'final_output_rows': final_rows,
+                'row_efficiency': (final_rows / total_input_rows * 100) if total_input_rows > 0 else 0
+            },
+            'schema_summary': {
+                'common_columns': len(schema_analysis['common_columns']),
+                'total_unique_columns': len(set().union(*[df.columns for df in sheet_data.values()])),
+                'compatibility_issues': len(schema_analysis['compatibility_issues'])
+            },
+            'data_quality': {
+                'strategy_used': strategy,
+                'recommendations': schema_analysis['recommendations']
+            }
+        }
+        
+        return quality_metrics
+
+    def show_consolidation_results(self, consolidation_results: Dict):
+        """Display consolidation results with comprehensive analysis"""
+        
+        st.divider()
+        st.header("📊 Consolidation Results")
+        
+        consolidated_df = consolidation_results['consolidated_data']
+        
+        if consolidated_df is not None and not consolidated_df.empty:
+            # Results overview
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("📊 Final Rows", f"{len(consolidated_df):,}")
+            with col2:
+                st.metric("📋 Final Columns", f"{len(consolidated_df.columns):,}")
+            with col3:
+                st.metric("🔗 Sheets Combined", f"{len(consolidation_results['sheets_processed'])}")
+            with col4:
+                memory_usage = consolidated_df.memory_usage(deep=True).sum() / 1024 / 1024
+                st.metric("💾 Memory Usage", f"{memory_usage:.1f} MB")
+            
+            # Display consolidated data
+            st.subheader("🔍 Consolidated Data Preview")
+            
+            # Add filtering capability
+            with st.expander("🔧 Data Filters", expanded=False):
+                if '_source_sheet' in consolidated_df.columns:
+                    source_filter = st.multiselect(
+                        "Filter by source sheet:",
+                        consolidated_df['_source_sheet'].unique(),
+                        default=consolidated_df['_source_sheet'].unique()
+                    )
+                    
+                    if source_filter:
+                        filtered_df = consolidated_df[consolidated_df['_source_sheet'].isin(source_filter)]
+                    else:
+                        filtered_df = consolidated_df
+                else:
+                    filtered_df = consolidated_df
+                
+                # Show sample of data
+                sample_size = st.slider("Preview rows:", 10, min(1000, len(filtered_df)), 100)
+            
+            st.dataframe(filtered_df.head(sample_size), use_container_width=True)
+            st.caption(f"Showing {min(sample_size, len(filtered_df)):,} of {len(filtered_df):,} total rows")
+            
+            # Schema analysis
+            if consolidation_results['schema_analysis']:
+                st.subheader("🔍 Schema Analysis")
+                
+                schema_col1, schema_col2 = st.columns(2)
+                
+                with schema_col1:
+                    st.write("**Common Columns:**")
+                    common_cols = consolidation_results['schema_analysis']['common_columns']
+                    if common_cols:
+                        for col in common_cols:
+                            st.write(f"✅ {col}")
+                    else:
+                        st.write("No common columns found")
+                
+                with schema_col2:
+                    st.write("**Unique Columns by Sheet:**")
+                    unique_cols = consolidation_results['schema_analysis']['unique_columns']
+                    if unique_cols:
+                        for sheet, cols in unique_cols.items():
+                            st.write(f"**{sheet}:** {', '.join(cols)}")
+                    else:
+                        st.write("All sheets have identical columns")
+            
+            # Export options
+            st.subheader("📥 Export Consolidated Data")
+            
+            if st.button("📊 Export to Excel", type="secondary"):
+                # Create Excel export with consolidation metadata
+                output = io.BytesIO()
+                
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                    # Main consolidated data
+                    consolidated_df.to_excel(writer, sheet_name='Consolidated Data', index=False)
+                    
+                    # Schema analysis
+                    if consolidation_results['schema_analysis']:
+                        schema_df = pd.DataFrame({
+                            'Metric': ['Total Sheets', 'Common Columns', 'Unique Columns', 'Strategy Used'],
+                            'Value': [
+                                len(consolidation_results['sheets_processed']),
+                                len(consolidation_results['schema_analysis']['common_columns']),
+                                len(consolidation_results['schema_analysis']['unique_columns']),
+                                consolidation_results['strategy']
+                            ]
+                        })
+                        schema_df.to_excel(writer, sheet_name='Consolidation Report', index=False)
+                
+                output.seek(0)
+                
+                st.download_button(
+                    label="⬇️ Download Consolidated Excel File",
+                    data=output.getvalue(),
+                    file_name=f"consolidated_data_{len(consolidation_results['sheets_processed'])}sheets.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+        else:
+            st.warning("No consolidated data to display")
+
+    def detect_time_patterns(self, sheet_names: List[str]) -> List[Dict]:
+        """Detect time-based patterns in sheet names for historical analysis"""
+        
+        patterns = []
+        
+        # Common time patterns to detect
+        monthly_patterns = {
+            'jan': 'January', 'feb': 'February', 'mar': 'March', 'apr': 'April',
+            'may': 'May', 'jun': 'June', 'jul': 'July', 'aug': 'August',
+            'sep': 'September', 'oct': 'October', 'nov': 'November', 'dec': 'December',
+            'january': 'January', 'february': 'February', 'march': 'March', 'april': 'April',
+            'june': 'June', 'july': 'July', 'august': 'August', 'september': 'September',
+            'october': 'October', 'november': 'November', 'december': 'December'
+        }
+        
+        quarterly_patterns = {
+            'q1': 'Q1', 'q2': 'Q2', 'q3': 'Q3', 'q4': 'Q4',
+            'quarter 1': 'Q1', 'quarter 2': 'Q2', 'quarter 3': 'Q3', 'quarter 4': 'Q4'
+        }
+        
+        yearly_patterns = {}
+        current_year = datetime.now().year
+        for year in range(current_year - 10, current_year + 5):
+            yearly_patterns[str(year)] = str(year)
+        
+        # Detect monthly patterns
+        monthly_sheets = []
+        monthly_periods = {}
+        for sheet in sheet_names:
+            sheet_lower = sheet.lower()
+            for pattern, full_name in monthly_patterns.items():
+                if pattern in sheet_lower:
+                    monthly_sheets.append(sheet)
+                    monthly_periods[sheet] = full_name
+                    break
+        
+        if len(monthly_sheets) >= 2:
+            patterns.append({
+                'type': 'Monthly Time Series',
+                'sheets': monthly_sheets,
+                'periods': monthly_periods,
+                'description': f'Found {len(monthly_sheets)} monthly periods'
+            })
+        
+        # Detect quarterly patterns
+        quarterly_sheets = []
+        quarterly_periods = {}
+        for sheet in sheet_names:
+            sheet_lower = sheet.lower()
+            for pattern, full_name in quarterly_patterns.items():
+                if pattern in sheet_lower:
+                    quarterly_sheets.append(sheet)
+                    quarterly_periods[sheet] = full_name
+                    break
+        
+        if len(quarterly_sheets) >= 2:
+            patterns.append({
+                'type': 'Quarterly Time Series',
+                'sheets': quarterly_sheets,
+                'periods': quarterly_periods,
+                'description': f'Found {len(quarterly_sheets)} quarterly periods'
+            })
+        
+        # Detect yearly patterns
+        yearly_sheets = []
+        yearly_periods = {}
+        for sheet in sheet_names:
+            sheet_lower = sheet.lower()
+            for pattern, full_name in yearly_patterns.items():
+                if pattern in sheet_lower:
+                    yearly_sheets.append(sheet)
+                    yearly_periods[sheet] = full_name
+                    break
+        
+        if len(yearly_sheets) >= 2:
+            patterns.append({
+                'type': 'Yearly Time Series',
+                'sheets': yearly_sheets,
+                'periods': yearly_periods,
+                'description': f'Found {len(yearly_sheets)} yearly periods'
+            })
+        
+        # Detect sequential numerical patterns (Week1, Week2, etc.)
+        import re
+        sequential_sheets = []
+        sequential_periods = {}
+        for sheet in sheet_names:
+            # Look for patterns like "Week1", "Month2", "Period3", etc.
+            match = re.search(r'(week|month|period|day|phase|step)[\s]*(\d+)', sheet.lower())
+            if match:
+                sequential_sheets.append(sheet)
+                sequential_periods[sheet] = f"{match.group(1).title()} {match.group(2)}"
+        
+        if len(sequential_sheets) >= 2:
+            patterns.append({
+                'type': 'Sequential Time Series',
+                'sheets': sequential_sheets,
+                'periods': sequential_periods,
+                'description': f'Found {len(sequential_sheets)} sequential periods'
+            })
+        
+        return patterns
+
+    def perform_historical_comparison(self, uploaded_file, sheets_to_compare: List[str],
+                                    analysis_mode: str, analysis_type: str, baseline_sheet: str = None,
+                                    include_variance: bool = True, show_trend_charts: bool = True) -> Dict:
+        """Perform comprehensive historical time-series comparison analysis"""
+        
+        try:
+            # Load all sheets data
+            sheet_data = {}
+            for sheet_name in sheets_to_compare:
+                df = self.read_sheet(uploaded_file, sheet_name)
+                if df is not None:
+                    sheet_data[sheet_name] = df
+            
+            if not sheet_data:
+                raise ValueError("No valid sheets found for analysis")
+            
+            # Progress tracking
+            progress_bar = st.progress(0)
+            progress_bar.progress(0.1, text="📊 Analyzing sheet structures...")
+            
+            # Analyze data structure consistency
+            structure_analysis = self._analyze_historical_structure(sheet_data)
+            
+            progress_bar.progress(0.3, text="📈 Calculating time-series metrics...")
+            
+            # Perform time-series analysis based on mode
+            if analysis_mode == "Trend Analysis":
+                analysis_results = self._perform_trend_analysis(sheet_data, structure_analysis, include_variance)
+            elif analysis_mode == "Period-to-Period Change":
+                analysis_results = self._perform_period_change_analysis(sheet_data, structure_analysis, include_variance)
+            else:  # Baseline Comparison
+                analysis_results = self._perform_baseline_comparison(sheet_data, structure_analysis, baseline_sheet, include_variance)
+            
+            progress_bar.progress(0.7, text="📊 Generating visualizations...")
+            
+            # Generate trend charts if requested
+            if show_trend_charts:
+                chart_data = self._generate_trend_charts(sheet_data, analysis_results, analysis_mode)
+                analysis_results['charts'] = chart_data
+            
+            progress_bar.progress(0.9, text="📋 Creating summary report...")
+            
+            # Create comprehensive historical report
+            historical_report = self._generate_historical_report(
+                sheet_data, analysis_results, analysis_mode, analysis_type, include_variance
+            )
+            
+            progress_bar.progress(1.0, text="✅ Historical analysis completed!")
+            
+            # Display results
+            self.show_historical_results({
+                'analysis_results': analysis_results,
+                'historical_report': historical_report,
+                'sheet_data': sheet_data,
+                'analysis_mode': analysis_mode,
+                'analysis_type': analysis_type,
+                'sheets_analyzed': sheets_to_compare
+            })
+            
+            return {
+                'analysis_results': analysis_results,
+                'historical_report': historical_report,
+                'sheet_data': sheet_data,
+                'analysis_mode': analysis_mode,
+                'analysis_type': analysis_type,
+                'sheets_analyzed': sheets_to_compare
+            }
+            
+        except Exception as e:
+            st.error(f"Historical analysis error: {str(e)}")
+            raise e
+
+    def _analyze_historical_structure(self, sheet_data: Dict) -> Dict:
+        """Analyze structure consistency across historical sheets"""
+        
+        structure_analysis = {
+            'common_columns': [],
+            'unique_columns': {},
+            'data_types': {},
+            'row_counts': {},
+            'compatibility_score': 0
+        }
+        
+        all_columns = set()
+        sheet_columns = {}
+        
+        for sheet_name, df in sheet_data.items():
+            sheet_columns[sheet_name] = set(df.columns)
+            all_columns.update(df.columns)
+            structure_analysis['row_counts'][sheet_name] = len(df)
+        
+        # Find common columns
+        if sheet_columns:
+            structure_analysis['common_columns'] = list(set.intersection(*sheet_columns.values()))
+        
+        # Find unique columns per sheet
+        for sheet_name, cols in sheet_columns.items():
+            unique_cols = cols - set(structure_analysis['common_columns'])
+            if unique_cols:
+                structure_analysis['unique_columns'][sheet_name] = list(unique_cols)
+        
+        # Calculate compatibility score
+        if all_columns:
+            common_ratio = len(structure_analysis['common_columns']) / len(all_columns)
+            structure_analysis['compatibility_score'] = common_ratio * 100
+        
+        return structure_analysis
+
+    def _perform_trend_analysis(self, sheet_data: Dict, structure_analysis: Dict, include_variance: bool) -> Dict:
+        """Perform trend analysis across time periods"""
+        
+        results = {
+            'trends': {},
+            'summary_stats': {},
+            'variance_metrics': {} if include_variance else None
+        }
+        
+        common_columns = structure_analysis['common_columns']
+        
+        for column in common_columns:
+            column_trends = {}
+            column_values = []
+            
+            for sheet_name, df in sheet_data.items():
+                if column in df.columns:
+                    # Calculate basic statistics for numeric columns
+                    if pd.api.types.is_numeric_dtype(df[column]):
+                        stats = {
+                            'mean': df[column].mean(),
+                            'median': df[column].median(),
+                            'sum': df[column].sum(),
+                            'count': df[column].count(),
+                            'min': df[column].min(),
+                            'max': df[column].max()
+                        }
+                        column_trends[sheet_name] = stats
+                        column_values.extend(df[column].dropna().tolist())
+                    else:
+                        # For non-numeric columns, provide basic counts
+                        stats = {
+                            'unique_count': df[column].nunique(),
+                            'most_common': df[column].mode().iloc[0] if not df[column].mode().empty else None,
+                            'count': df[column].count(),
+                            'null_count': df[column].isnull().sum()
+                        }
+                        column_trends[sheet_name] = stats
+            
+            results['trends'][column] = column_trends
+            
+            # Calculate variance metrics for numeric columns
+            if include_variance and column_values and pd.api.types.is_numeric_dtype(pd.Series(column_values)):
+                series = pd.Series(column_values)
+                results['variance_metrics'][column] = {
+                    'std_dev': series.std(),
+                    'variance': series.var(),
+                    'coefficient_variation': (series.std() / series.mean()) * 100 if series.mean() != 0 else 0,
+                    'range': series.max() - series.min()
+                }
+        
+        return results
+
+    def _perform_period_change_analysis(self, sheet_data: Dict, structure_analysis: Dict, include_variance: bool) -> Dict:
+        """Analyze period-to-period changes"""
+        
+        results = {
+            'changes': {},
+            'growth_rates': {},
+            'variance_metrics': {} if include_variance else None
+        }
+        
+        common_columns = structure_analysis['common_columns']
+        sheet_names = list(sheet_data.keys())
+        
+        for column in common_columns:
+            changes = {}
+            growth_rates = {}
+            
+            for i in range(1, len(sheet_names)):
+                current_sheet = sheet_names[i]
+                previous_sheet = sheet_names[i-1]
+                
+                current_df = sheet_data[current_sheet]
+                previous_df = sheet_data[previous_sheet]
+                
+                if column in current_df.columns and column in previous_df.columns:
+                    if pd.api.types.is_numeric_dtype(current_df[column]):
+                        current_sum = current_df[column].sum()
+                        previous_sum = previous_df[column].sum()
+                        
+                        change = current_sum - previous_sum
+                        growth_rate = ((current_sum - previous_sum) / previous_sum * 100) if previous_sum != 0 else 0
+                        
+                        period_key = f"{previous_sheet} → {current_sheet}"
+                        changes[period_key] = change
+                        growth_rates[period_key] = growth_rate
+            
+            results['changes'][column] = changes
+            results['growth_rates'][column] = growth_rates
+        
+        return results
+
+    def _perform_baseline_comparison(self, sheet_data: Dict, structure_analysis: Dict, baseline_sheet: str, include_variance: bool) -> Dict:
+        """Compare all periods against a baseline period"""
+        
+        results = {
+            'baseline_comparisons': {},
+            'relative_changes': {},
+            'variance_metrics': {} if include_variance else None
+        }
+        
+        if baseline_sheet not in sheet_data:
+            raise ValueError(f"Baseline sheet '{baseline_sheet}' not found in data")
+        
+        baseline_df = sheet_data[baseline_sheet]
+        common_columns = structure_analysis['common_columns']
+        
+        for column in common_columns:
+            comparisons = {}
+            relative_changes = {}
+            
+            if column in baseline_df.columns:
+                baseline_value = baseline_df[column].sum() if pd.api.types.is_numeric_dtype(baseline_df[column]) else baseline_df[column].count()
+                
+                for sheet_name, df in sheet_data.items():
+                    if sheet_name != baseline_sheet and column in df.columns:
+                        if pd.api.types.is_numeric_dtype(df[column]):
+                            current_value = df[column].sum()
+                            comparison = current_value - baseline_value
+                            relative_change = ((current_value - baseline_value) / baseline_value * 100) if baseline_value != 0 else 0
+                        else:
+                            current_value = df[column].count()
+                            comparison = current_value - baseline_value
+                            relative_change = ((current_value - baseline_value) / baseline_value * 100) if baseline_value != 0 else 0
+                        
+                        comparisons[sheet_name] = comparison
+                        relative_changes[sheet_name] = relative_change
+            
+            results['baseline_comparisons'][column] = comparisons
+            results['relative_changes'][column] = relative_changes
+        
+        return results
+
+    def _generate_trend_charts(self, sheet_data: Dict, analysis_results: Dict, analysis_mode: str) -> Dict:
+        """Generate trend visualization data"""
+        
+        chart_data = {
+            'time_series': {},
+            'comparison_charts': {},
+            'chart_config': {
+                'analysis_mode': analysis_mode,
+                'periods': list(sheet_data.keys())
+            }
+        }
+        
+        # This would contain matplotlib/plotly chart generation
+        # For now, we'll prepare the data structure for charts
+        
+        return chart_data
+
+    def _generate_historical_report(self, sheet_data: Dict, analysis_results: Dict, 
+                                   analysis_mode: str, analysis_type: str, include_variance: bool) -> Dict:
+        """Generate comprehensive historical analysis report"""
+        
+        total_periods = len(sheet_data)
+        total_records = sum(len(df) for df in sheet_data.values())
+        
+        report = {
+            'executive_summary': {
+                'analysis_type': analysis_type,
+                'analysis_mode': analysis_mode,
+                'periods_analyzed': total_periods,
+                'total_records': total_records,
+                'analysis_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            },
+            'key_insights': [],
+            'recommendations': []
+        }
+        
+        # Generate insights based on analysis results
+        if 'trends' in analysis_results:
+            report['key_insights'].append("Trend patterns identified across time periods")
+        
+        if 'changes' in analysis_results:
+            report['key_insights'].append("Period-to-period changes calculated")
+        
+        if 'baseline_comparisons' in analysis_results:
+            report['key_insights'].append("Baseline comparison analysis completed")
+        
+        return report
+
+    def show_historical_results(self, historical_results: Dict):
+        """Display comprehensive historical analysis results"""
+        
+        st.divider()
+        st.header("📈 Historical Analysis Results")
+        
+        analysis_results = historical_results['analysis_results']
+        historical_report = historical_results['historical_report']
+        analysis_mode = historical_results['analysis_mode']
+        
+        # Executive summary
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("📅 Periods Analyzed", historical_report['executive_summary']['periods_analyzed'])
+        with col2:
+            st.metric("📊 Total Records", f"{historical_report['executive_summary']['total_records']:,}")
+        with col3:
+            st.metric("🔍 Analysis Type", historical_report['executive_summary']['analysis_type'])
+        with col4:
+            st.metric("📈 Analysis Mode", analysis_mode)
+        
+        # Results tabs
+        if analysis_mode == "Trend Analysis" and 'trends' in analysis_results:
+            self._display_trend_results(analysis_results['trends'], analysis_results.get('variance_metrics'))
+        elif analysis_mode == "Period-to-Period Change" and 'changes' in analysis_results:
+            self._display_change_results(analysis_results['changes'], analysis_results['growth_rates'])
+        elif analysis_mode == "Baseline Comparison" and 'baseline_comparisons' in analysis_results:
+            self._display_baseline_results(analysis_results['baseline_comparisons'], analysis_results['relative_changes'])
+        
+        # Export options
+        st.subheader("📥 Export Historical Analysis")
+        
+        if st.button("📊 Export to Excel", type="secondary"):
+            # Create Excel export with historical analysis
+            output = io.BytesIO()
+            
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                # Export trend data or other analysis results
+                if 'trends' in analysis_results:
+                    # Convert trends to exportable format
+                    for column, trends in analysis_results['trends'].items():
+                        trend_df = pd.DataFrame(trends).T
+                        trend_df.to_excel(writer, sheet_name=f'Trends_{column}'[:31])
+                
+                # Executive summary
+                summary_df = pd.DataFrame([historical_report['executive_summary']])
+                summary_df.to_excel(writer, sheet_name='Executive Summary', index=False)
+            
+            output.seek(0)
+            
+            st.download_button(
+                label="⬇️ Download Historical Analysis",
+                data=output.getvalue(),
+                file_name=f"historical_analysis_{len(historical_results['sheets_analyzed'])}periods.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+    def _display_trend_results(self, trends: Dict, variance_metrics: Dict = None):
+        """Display trend analysis results"""
+        
+        st.subheader("📈 Trend Analysis Results")
+        
+        for column, trend_data in trends.items():
+            with st.expander(f"📊 {column} Trends", expanded=True):
+                trend_df = pd.DataFrame(trend_data).T
+                st.dataframe(trend_df, use_container_width=True)
+                
+                if variance_metrics and column in variance_metrics:
+                    st.write("**Variance Metrics:**")
+                    variance_df = pd.DataFrame([variance_metrics[column]])
+                    st.dataframe(variance_df, use_container_width=True)
+
+    def _display_change_results(self, changes: Dict, growth_rates: Dict):
+        """Display period-to-period change results"""
+        
+        st.subheader("📊 Period-to-Period Changes")
+        
+        for column in changes.keys():
+            with st.expander(f"📈 {column} Changes", expanded=True):
+                change_data = []
+                
+                for period, change in changes[column].items():
+                    growth_rate = growth_rates[column].get(period, 0)
+                    change_data.append({
+                        'Period Transition': period,
+                        'Absolute Change': change,
+                        'Growth Rate (%)': f"{growth_rate:.2f}%"
+                    })
+                
+                if change_data:
+                    change_df = pd.DataFrame(change_data)
+                    st.dataframe(change_df, hide_index=True, use_container_width=True)
+
+    def _display_baseline_results(self, baseline_comparisons: Dict, relative_changes: Dict):
+        """Display baseline comparison results"""
+        
+        st.subheader("📊 Baseline Comparison Results")
+        
+        for column in baseline_comparisons.keys():
+            with st.expander(f"📈 {column} vs Baseline", expanded=True):
+                baseline_data = []
+                
+                for sheet, comparison in baseline_comparisons[column].items():
+                    relative_change = relative_changes[column].get(sheet, 0)
+                    baseline_data.append({
+                        'Period': sheet,
+                        'Difference from Baseline': comparison,
+                        'Relative Change (%)': f"{relative_change:.2f}%"
+                    })
+                
+                if baseline_data:
+                    baseline_df = pd.DataFrame(baseline_data)
+                    st.dataframe(baseline_df, hide_index=True, use_container_width=True)
+
 def main():
     st.title("📊 Excel Comparison Tool")
     st.markdown("**Compare data between Excel files or sheets with advanced matching algorithms**")
@@ -1676,9 +2620,9 @@ def main():
         # Comparison mode selection
         comparison_mode = st.radio(
             "🔄 Comparison Mode:",
-            options=["Two Different Files", "Same File (Different Sheets)", "Multi-Sheet Batch Processing"],
+            options=["Two Different Files", "Same File (Different Sheets)", "Multi-Sheet Batch Processing", "Cross-Sheet Data Consolidation", "Historical Comparison Mode"],
             index=0,
-            help="Choose comparison type: separate files, two sheets, or one reference sheet vs multiple sheets"
+            help="Choose comparison type: separate files, two sheets, batch processing, multi-sheet consolidation, or time-series analysis"
         )
         
         st.divider()
@@ -1700,6 +2644,8 @@ def main():
             # Set both files as the same for processing
             same_file_mode = False
             batch_mode = False
+            consolidation_mode = False
+            historical_mode = False
             
         elif comparison_mode == "Same File (Different Sheets)":
             # Same file, different sheets mode
@@ -1740,6 +2686,8 @@ def main():
             uploaded_file_b = uploaded_single_file
             same_file_mode = True
             batch_mode = False
+            consolidation_mode = False
+            historical_mode = False
             
         elif comparison_mode == "Multi-Sheet Batch Processing":
             # Batch processing mode
@@ -1780,9 +2728,97 @@ def main():
             uploaded_file_b = None  # Will be set dynamically for each comparison
             same_file_mode = False
             batch_mode = True
+            consolidation_mode = False
+            historical_mode = False
+            
+        elif comparison_mode == "Cross-Sheet Data Consolidation":
+            # Consolidation mode
+            st.info("🔗 Consolidate data from multiple sheets into a unified view")
+            
+            # Show consolidation examples
+            with st.expander("💡 Consolidation Use Cases", expanded=False):
+                st.markdown("""
+                **📊 Data Aggregation:**
+                - Combine regional sales data from multiple sheets
+                - Merge department reports into company overview
+                - Consolidate monthly data into quarterly summary
+                
+                **🔍 Comprehensive Analysis:**
+                - Union data from similar structured sheets
+                - Cross-reference data across time periods
+                - Create master dataset from distributed sources
+                
+                **📈 Business Intelligence:**
+                - Combine data from different business units
+                - Merge customer data from various sources
+                - Consolidate inventory from multiple locations
+                
+                **🎯 Data Quality:**
+                - Identify duplicates across sheets
+                - Find data gaps between sources
+                - Harmonize different data formats
+                """)
+            
+            uploaded_consolidation_file = st.file_uploader(
+                "Choose Excel file for data consolidation", 
+                type=['xlsx', 'xls'],
+                key="consolidation_file"
+            )
+            
+            # Set up for consolidation processing
+            uploaded_file_a = uploaded_consolidation_file  # Main file for consolidation
+            uploaded_file_b = None  # Not used in consolidation mode
+            same_file_mode = False
+            batch_mode = False
+            consolidation_mode = True
+            historical_mode = False
+            
+        elif comparison_mode == "Historical Comparison Mode":
+            # Historical time-series comparison mode
+            st.info("📈 Compare time-series data across multiple sheets")
+            
+            # Show historical comparison examples
+            with st.expander("💡 Historical Analysis Use Cases", expanded=False):
+                st.markdown("""
+                **📅 Time-Series Analysis:**
+                - Compare Jan vs Feb vs Mar monthly data
+                - Analyze quarterly trends (Q1 vs Q2 vs Q3 vs Q4)
+                - Track year-over-year performance changes
+                
+                **📊 Trend Identification:**
+                - Identify seasonal patterns in data  
+                - Spot performance trends over time
+                - Compare historical baselines vs current data
+                
+                **📈 Business Intelligence:**
+                - Monthly sales performance tracking
+                - Budget vs actual over multiple periods
+                - KPI evolution analysis across time
+                
+                **🎯 Pattern Recognition:**
+                - Detect recurring data patterns
+                - Identify anomalies in time series
+                - Compare cyclical business data
+                """)
+            
+            uploaded_historical_file = st.file_uploader(
+                "Choose Excel file with time-series sheets", 
+                type=['xlsx', 'xls'],
+                key="historical_file"
+            )
+            
+            # Set up for historical processing
+            uploaded_file_a = uploaded_historical_file  # Main file for historical analysis
+            uploaded_file_b = None  # Not used in historical mode
+            same_file_mode = False
+            batch_mode = False
+            consolidation_mode = False
+            historical_mode = True
             
         else:
             batch_mode = False
+            consolidation_mode = False
+            historical_mode = False
         
         st.divider()
         
@@ -1951,6 +2987,308 @@ def main():
                 else:
                     st.warning("⚠️ Please select key columns for batch processing.")
     
+    elif consolidation_mode and uploaded_file_a:
+        # Consolidation Processing Layout
+        st.header("🔗 Cross-Sheet Data Consolidation")
+        
+        # Get all sheet names
+        _, all_sheet_names = comparator.load_excel_file(uploaded_file_a, "Consolidation File")
+        
+        if all_sheet_names and len(all_sheet_names) > 1:
+            st.success(f"📊 Found {len(all_sheet_names)} sheets: {', '.join(all_sheet_names)}")
+            
+            # Sheet selection for consolidation
+            col_sel1, col_sel2 = st.columns(2)
+            
+            with col_sel1:
+                st.subheader("📋 Sheets to Consolidate")
+                sheets_to_consolidate = st.multiselect(
+                    "Select sheets to consolidate (minimum 2):",
+                    all_sheet_names,
+                    default=all_sheet_names[:3] if len(all_sheet_names) >= 3 else all_sheet_names,
+                    key="consolidation_sheets",
+                    help="Select 2 or more sheets to combine into unified view"
+                )
+                
+                if len(sheets_to_consolidate) >= 2:
+                    st.success(f"✅ Will consolidate {len(sheets_to_consolidate)} sheets")
+                    
+                    # Show sheets preview
+                    consolidation_summary = []
+                    for sheet in sheets_to_consolidate[:5]:  # Show first 5 for preview
+                        df_sheet = comparator.read_sheet(uploaded_file_a, sheet)
+                        if df_sheet is not None:
+                            consolidation_summary.append({
+                                'Sheet': sheet,
+                                'Rows': f"{len(df_sheet):,}",
+                                'Columns': f"{len(df_sheet.columns):,}"
+                            })
+                    
+                    if consolidation_summary:
+                        st.write("**Selected Sheets Preview:**")
+                        summary_df = pd.DataFrame(consolidation_summary)
+                        st.dataframe(summary_df, hide_index=True, use_container_width=True)
+                        
+                        if len(sheets_to_consolidate) > 5:
+                            st.info(f"... and {len(sheets_to_consolidate) - 5} more sheets")
+                else:
+                    st.warning("⚠️ Please select at least 2 sheets for consolidation")
+            
+            with col_sel2:
+                st.subheader("🔑 Consolidation Strategy")
+                
+                consolidation_strategy = st.radio(
+                    "Choose consolidation method:",
+                    ["Union (Combine all data)", "Key-based Merge", "Schema Analysis Only"],
+                    index=0,
+                    help="Union: Stack all data together | Key-based: Merge on common columns | Analysis: Compare structures"
+                )
+                
+                if consolidation_strategy == "Key-based Merge":
+                    st.info("🔍 Will identify common key columns across selected sheets")
+                elif consolidation_strategy == "Union (Combine all data)":
+                    st.info("📚 Will stack all data and harmonize column names")
+                else:
+                    st.info("🔬 Will analyze and compare sheet structures")
+            
+            # Consolidation Configuration
+            if len(sheets_to_consolidate) >= 2:
+                st.divider()
+                st.header("🔧 Consolidation Configuration")
+                
+                config_col1, config_col2 = st.columns(2)
+                
+                with config_col1:
+                    st.subheader("📊 Data Options")
+                    
+                    include_source_column = st.checkbox(
+                        "Add source sheet column",
+                        value=True,
+                        help="Add a column indicating which sheet each row came from"
+                    )
+                    
+                    handle_duplicates = st.selectbox(
+                        "Handle duplicate rows:",
+                        ["Keep all", "Remove duplicates", "Mark duplicates"],
+                        index=0,
+                        help="How to handle rows that appear in multiple sheets"
+                    )
+                    
+                    missing_data_strategy = st.selectbox(
+                        "Missing column strategy:",
+                        ["Fill with blanks", "Skip rows", "Use default value"],
+                        index=0,
+                        help="How to handle columns that exist in some sheets but not others"
+                    )
+                
+                with config_col2:
+                    st.subheader("🎯 Quality Control")
+                    
+                    validate_schemas = st.checkbox(
+                        "Validate column compatibility",
+                        value=True,
+                        help="Check if columns with same names have compatible data types"
+                    )
+                    
+                    show_consolidation_report = st.checkbox(
+                        "Generate consolidation report",
+                        value=True,
+                        help="Create detailed report of consolidation process and data quality"
+                    )
+                
+                # Consolidation execution button
+                st.divider()
+                
+                if st.button("🚀 Start Cross-Sheet Consolidation", type="primary", use_container_width=True):
+                    st.info(f"🔄 Starting consolidation of {len(sheets_to_consolidate)} sheets...")
+                    
+                    # Show consolidation parameters
+                    with st.expander("📋 Consolidation Parameters", expanded=False):
+                        st.write(f"**🔗 Consolidation Overview:**")
+                        st.write(f"- Strategy: {consolidation_strategy}")
+                        st.write(f"- Sheets: {len(sheets_to_consolidate)} sheets")
+                        st.write(f"- Source tracking: {'Yes' if include_source_column else 'No'}")
+                        st.write(f"- Duplicate handling: {handle_duplicates}")
+                        st.write(f"- Missing data: {missing_data_strategy}")
+                        st.write(f"- Schema validation: {'Yes' if validate_schemas else 'No'}")
+                    
+                    try:
+                        # Perform consolidation
+                        consolidation_results = comparator.perform_consolidation(
+                            uploaded_file_a, sheets_to_consolidate,
+                            consolidation_strategy, include_source_column,
+                            handle_duplicates, missing_data_strategy,
+                            validate_schemas, show_consolidation_report
+                        )
+                        
+                        # Store results for display and export
+                        st.session_state.consolidation_results = consolidation_results
+                        
+                        st.balloons()
+                        st.success("🎉 Cross-sheet consolidation completed! Results are displayed above.")
+                        
+                    except Exception as e:
+                        st.error(f"❌ Error during consolidation: {str(e)}")
+                        st.write("Please check your data and configuration.")
+        else:
+            st.warning("⚠️ Please upload an Excel file with multiple sheets for consolidation")
+    
+    elif historical_mode and uploaded_file_a:
+        # Historical Comparison Processing Layout
+        st.header("📈 Historical Comparison Mode")
+        
+        # Get all sheet names
+        _, all_sheet_names = comparator.load_excel_file(uploaded_file_a, "Historical File")
+        
+        if all_sheet_names and len(all_sheet_names) > 1:
+            st.success(f"📊 Found {len(all_sheet_names)} sheets: {', '.join(all_sheet_names)}")
+            
+            # Automatic pattern detection
+            historical_patterns = comparator.detect_time_patterns(all_sheet_names)
+            
+            # Show detected patterns
+            if historical_patterns:
+                st.subheader("🔍 Auto-Detected Time Patterns")
+                
+                pattern_tabs = st.tabs([f"📅 {pattern['type']}" for pattern in historical_patterns])
+                
+                for i, pattern in enumerate(historical_patterns):
+                    with pattern_tabs[i]:
+                        st.write(f"**Pattern Type:** {pattern['type']}")
+                        st.write(f"**Sheets Found:** {len(pattern['sheets'])}")
+                        
+                        # Show pattern preview
+                        pattern_summary = []
+                        for sheet in pattern['sheets'][:5]:  # Show first 5
+                            df_sheet = comparator.read_sheet(uploaded_file_a, sheet)
+                            if df_sheet is not None:
+                                pattern_summary.append({
+                                    'Sheet': sheet,
+                                    'Period': pattern.get('periods', {}).get(sheet, 'Unknown'),
+                                    'Rows': f"{len(df_sheet):,}",
+                                    'Columns': f"{len(df_sheet.columns):,}"
+                                })
+                        
+                        if pattern_summary:
+                            st.write("**Time Series Preview:**")
+                            pattern_df = pd.DataFrame(pattern_summary)
+                            st.dataframe(pattern_df, hide_index=True, use_container_width=True)
+                            
+                            if len(pattern['sheets']) > 5:
+                                st.info(f"... and {len(pattern['sheets']) - 5} more periods")
+            
+            # Manual sheet selection and configuration
+            st.divider()
+            st.subheader("📋 Historical Analysis Configuration")
+            
+            config_col1, config_col2 = st.columns(2)
+            
+            with config_col1:
+                st.write("**📅 Time Period Selection**")
+                
+                # Let user choose from detected patterns or manual selection
+                if historical_patterns:
+                    use_auto_pattern = st.radio(
+                        "Selection method:",
+                        ["Use detected pattern", "Manual selection"],
+                        index=0
+                    )
+                    
+                    if use_auto_pattern == "Use detected pattern":
+                        selected_pattern = st.selectbox(
+                            "Choose time pattern:",
+                            range(len(historical_patterns)),
+                            format_func=lambda x: f"{historical_patterns[x]['type']} ({len(historical_patterns[x]['sheets'])} periods)"
+                        )
+                        sheets_to_compare = historical_patterns[selected_pattern]['sheets']
+                        analysis_type = historical_patterns[selected_pattern]['type']
+                    else:
+                        sheets_to_compare = st.multiselect(
+                            "Select sheets for comparison:",
+                            all_sheet_names,
+                            default=all_sheet_names[:4] if len(all_sheet_names) >= 4 else all_sheet_names,
+                            help="Select sheets representing different time periods"
+                        )
+                        analysis_type = "Custom"
+                else:
+                    sheets_to_compare = st.multiselect(
+                        "Select sheets for comparison:",
+                        all_sheet_names,
+                        default=all_sheet_names[:4] if len(all_sheet_names) >= 4 else all_sheet_names,
+                        help="Select sheets representing different time periods"
+                    )
+                    analysis_type = "Custom"
+            
+            with config_col2:
+                st.write("**🎯 Analysis Options**")
+                
+                analysis_mode = st.radio(
+                    "Comparison focus:",
+                    ["Trend Analysis", "Period-to-Period Change", "Baseline Comparison"],
+                    index=0,
+                    help="Trend: Overall patterns | Change: Sequential differences | Baseline: Compare all to reference"
+                )
+                
+                if analysis_mode == "Baseline Comparison":
+                    baseline_sheet = st.selectbox(
+                        "Select baseline period:",
+                        sheets_to_compare if len(sheets_to_compare) > 0 else all_sheet_names,
+                        help="All other periods will be compared to this baseline"
+                    )
+                
+                include_variance = st.checkbox(
+                    "Calculate variance metrics",
+                    value=True,
+                    help="Include standard deviation, coefficient of variation, etc."
+                )
+                
+                show_trend_charts = st.checkbox(
+                    "Generate trend visualizations",
+                    value=True,
+                    help="Create charts showing data trends over time"
+                )
+            
+            # Historical comparison execution
+            if len(sheets_to_compare) >= 2:
+                st.divider()
+                
+                if st.button("📈 Start Historical Analysis", type="primary", use_container_width=True):
+                    st.info(f"🔄 Starting historical analysis of {len(sheets_to_compare)} time periods...")
+                    
+                    # Show analysis parameters
+                    with st.expander("📋 Analysis Parameters", expanded=False):
+                        st.write(f"**📈 Historical Analysis Overview:**")
+                        st.write(f"- Analysis Type: {analysis_type}")
+                        st.write(f"- Time Periods: {len(sheets_to_compare)}")
+                        st.write(f"- Comparison Mode: {analysis_mode}")
+                        if analysis_mode == "Baseline Comparison":
+                            st.write(f"- Baseline Period: {baseline_sheet}")
+                        st.write(f"- Variance Metrics: {'Yes' if include_variance else 'No'}")
+                        st.write(f"- Trend Charts: {'Yes' if show_trend_charts else 'No'}")
+                    
+                    try:
+                        # Perform historical analysis
+                        historical_results = comparator.perform_historical_comparison(
+                            uploaded_file_a, sheets_to_compare,
+                            analysis_mode, analysis_type,
+                            baseline_sheet if analysis_mode == "Baseline Comparison" else None,
+                            include_variance, show_trend_charts
+                        )
+                        
+                        # Store results for display and export
+                        st.session_state.historical_results = historical_results
+                        
+                        st.balloons()
+                        st.success("🎉 Historical analysis completed! Results are displayed above.")
+                        
+                    except Exception as e:
+                        st.error(f"❌ Error during historical analysis: {str(e)}")
+                        st.write("Please check your data and configuration.")
+            else:
+                st.warning("⚠️ Please select at least 2 time periods for historical comparison")
+        else:
+            st.warning("⚠️ Please upload an Excel file with multiple sheets for historical analysis")
+    
     else:
         # Regular two-column layout for other modes
         col1, col2 = st.columns(2)
@@ -2097,6 +3435,80 @@ def main():
                         st.info("Upload file above to see available sheets")
                     else:
                         st.info("Please upload Sheet B")
+    
+    # Sheet Swap functionality
+    if comparator.df_a is not None and comparator.df_b is not None:
+        st.divider()
+        st.subheader("🔄 Sheet Management")
+        
+        # Add helpful explanation
+        with st.expander("💡 When to use Sheet Swap?", expanded=False):
+            st.markdown("""
+            **🔄 Sheet Swap is useful when you want to:**
+            - **Reverse comparison direction**: Compare B→A instead of A→B
+            - **Change perspective**: Make the target sheet the source sheet
+            - **Save time**: No need to re-upload files or re-select sheets
+            - **Test different approaches**: Compare both directions quickly
+            
+            **Example scenarios:**
+            - Compare "January vs February" then swap to "February vs January"
+            - Compare "Budget vs Actual" then swap to "Actual vs Budget"  
+            - Compare "Before vs After" then swap to "After vs Before"
+            """)
+        
+        # Add swap button with clear visual indication
+        col_swap1, col_swap2, col_swap3 = st.columns([1, 1, 1])
+        
+        with col_swap2:
+            st.markdown("**🔄 Quick Sheet Swap**")
+            if st.button("🔄 Swap Sheets (A ↔ B)", type="secondary", use_container_width=True, help="Switch Sheet A and Sheet B positions - useful to reverse comparison direction without re-uploading"):
+                # Store current selections
+                current_sheet_a = st.session_state.get('sheet_a', None)
+                current_sheet_b = st.session_state.get('sheet_b', None)
+                
+                # Swap the dataframes
+                temp_df = comparator.df_a.copy()
+                comparator.df_a = comparator.df_b.copy()
+                comparator.df_b = temp_df
+                
+                # Update session state to reflect the swap
+                if same_file_mode:
+                    # For same file mode, swap the sheet selections
+                    st.session_state.sheet_a = current_sheet_b
+                    st.session_state.sheet_b = current_sheet_a
+                else:
+                    # For different files mode, swap the sheet selections
+                    # The dataframes are already swapped above
+                    st.session_state.sheet_a = current_sheet_b
+                    st.session_state.sheet_b = current_sheet_a
+                
+                # Clear any previous results and suggestions
+                if hasattr(st.session_state, 'column_suggestions'):
+                    del st.session_state.column_suggestions
+                if hasattr(st.session_state, 'suggested_extract'):
+                    del st.session_state.suggested_extract
+                if hasattr(comparator, 'results'):
+                    comparator.results = None
+                
+                st.success("✅ Sheets swapped successfully! Sheet A is now Sheet B and vice versa.")
+                st.info("💡 Column suggestions and previous results have been cleared. Generate new suggestions if needed.")
+                
+                # Force a rerun to update the UI
+                st.rerun()
+        
+        # Show current sheet assignments for clarity
+        st.markdown("**📊 Current Sheet Assignment:**")
+        assignment_col1, assignment_col2 = st.columns(2)
+        
+        with assignment_col1:
+            current_sheet_a_name = st.session_state.get('sheet_a', 'Unknown')
+            st.success(f"📋 **Sheet A (Source)**: {current_sheet_a_name}")
+            st.caption(f"📊 {len(comparator.df_a):,} rows × {len(comparator.df_a.columns):,} columns")
+            
+        with assignment_col2:
+            current_sheet_b_name = st.session_state.get('sheet_b', 'Unknown') 
+            st.info(f"📋 **Sheet B (Target)**: {current_sheet_b_name}")
+            st.caption(f"📊 {len(comparator.df_b):,} rows × {len(comparator.df_b.columns):,} columns")
     
     # Column selection and comparison
     if comparator.df_a is not None and comparator.df_b is not None:

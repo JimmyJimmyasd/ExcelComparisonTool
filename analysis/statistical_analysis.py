@@ -3,10 +3,17 @@
 
 import pandas as pd
 import numpy as np
-from scipy import stats
 from typing import Dict, List, Tuple, Optional
 import warnings
 warnings.filterwarnings('ignore')
+
+# Handle scipy import gracefully for deployment compatibility
+try:
+    from scipy import stats
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
+    print("Warning: scipy not available. Some statistical tests will be disabled.")
 
 class StatisticalAnalyzer:
     """
@@ -78,8 +85,8 @@ class StatisticalAnalyzer:
                 'q1': series.quantile(0.25),
                 'q3': series.quantile(0.75),
                 'iqr': series.quantile(0.75) - series.quantile(0.25),
-                'skewness': stats.skew(series),
-                'kurtosis': stats.kurtosis(series),
+                'skewness': stats.skew(series) if SCIPY_AVAILABLE else series.skew(),
+                'kurtosis': stats.kurtosis(series) if SCIPY_AVAILABLE else series.kurtosis(),
                 'coefficient_of_variation': (series.std() / series.mean()) * 100 if series.mean() != 0 else 0
             }
         
@@ -246,16 +253,31 @@ class StatisticalAnalyzer:
             return {'test': 'insufficient_data', 'is_normal': False}
         
         try:
-            # Shapiro-Wilk test for normality
-            stat, p_value = stats.shapiro(series.sample(min(5000, len(series))))  # Limit sample size
-            
-            return {
-                'test': 'shapiro_wilk',
-                'statistic': stat,
-                'p_value': p_value,
-                'is_normal': p_value > alpha,
-                'alpha': alpha
-            }
+            if SCIPY_AVAILABLE:
+                # Shapiro-Wilk test for normality
+                stat, p_value = stats.shapiro(series.sample(min(5000, len(series))))  # Limit sample size
+                
+                return {
+                    'test': 'shapiro_wilk',
+                    'statistic': stat,
+                    'p_value': p_value,
+                    'is_normal': p_value > alpha,
+                    'alpha': alpha
+                }
+            else:
+                # Fallback: simple normality check using skewness and kurtosis
+                skewness = abs(series.skew())
+                kurtosis = abs(series.kurtosis())
+                is_normal = skewness < 2 and kurtosis < 7  # Simple heuristic
+                
+                return {
+                    'test': 'simple_normality_check',
+                    'statistic': None,
+                    'p_value': None,
+                    'is_normal': is_normal,
+                    'alpha': alpha,
+                    'note': 'Simplified normality check (scipy unavailable)'
+                }
         except Exception:
             return {'test': 'failed', 'is_normal': False}
     

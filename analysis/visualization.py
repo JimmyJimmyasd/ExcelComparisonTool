@@ -1,9 +1,6 @@
 # Visualization Module for Statistical Analysis
 # Provides interactive charts and plots using Plotly
 
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Optional, Tuple, Any
@@ -11,6 +8,35 @@ import streamlit as st
 import base64
 import io
 from datetime import datetime
+
+# Handle plotly import gracefully for deployment compatibility
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    PLOTLY_AVAILABLE = True
+    PlotlyFigure = go.Figure
+except ImportError:
+    PLOTLY_AVAILABLE = False
+    print("Warning: plotly not available. Interactive charts will be disabled.")
+    # Create dummy objects to prevent errors
+    class DummyPlotly:
+        def __init__(self):
+            pass
+        def __getattr__(self, name):
+            return lambda *args, **kwargs: None
+    
+    class DummyFigure:
+        def __init__(self):
+            pass
+        def __getattr__(self, name):
+            return lambda *args, **kwargs: self
+    
+    px = DummyPlotly()
+    go = DummyPlotly()
+    PlotlyFigure = DummyFigure
+    make_subplots = DummyPlotly()
+    PlotlyFigure = Any  # Use Any type when plotly is not available
 
 class StatisticalVisualizer:
     """
@@ -21,7 +47,7 @@ class StatisticalVisualizer:
         self.color_palette = px.colors.qualitative.Set3
         self.sequential_colors = px.colors.sequential.Viridis
     
-    def create_descriptive_stats_chart(self, desc_stats: Dict, title: str = "Descriptive Statistics") -> go.Figure:
+    def create_descriptive_stats_chart(self, desc_stats: Dict, title: str = "Descriptive Statistics") -> PlotlyFigure:
         """Create a comprehensive descriptive statistics chart"""
         
         if not desc_stats or 'message' in desc_stats:
@@ -92,7 +118,7 @@ class StatisticalVisualizer:
         
         return fig
     
-    def create_missing_data_heatmap(self, df: pd.DataFrame, title: str = "Missing Data Pattern") -> go.Figure:
+    def create_missing_data_heatmap(self, df: pd.DataFrame, title: str = "Missing Data Pattern") -> PlotlyFigure:
         """Create a heatmap showing missing data patterns"""
         
         # Create missing data matrix
@@ -101,7 +127,7 @@ class StatisticalVisualizer:
         if missing_matrix.sum().sum() == 0:
             return self._create_no_data_chart("No missing data found - all cells are complete! ✅")
         
-        fig = go.Figure(data=go.Heatmap(
+        fig = PlotlyFigure(data=go.Heatmap(
             z=missing_matrix.values,
             x=missing_matrix.columns,
             y=list(range(len(missing_matrix))),
@@ -124,7 +150,7 @@ class StatisticalVisualizer:
         
         return fig
     
-    def create_missing_data_summary_chart(self, missing_analysis: Dict) -> go.Figure:
+    def create_missing_data_summary_chart(self, missing_analysis: Dict) -> PlotlyFigure:
         """Create a summary chart of missing data by column"""
         
         if '_summary' not in missing_analysis:
@@ -150,7 +176,7 @@ class StatisticalVisualizer:
             else:
                 colors.append('green')
         
-        fig = go.Figure(data=go.Bar(
+        fig = PlotlyFigure(data=go.Bar(
             x=list(sorted_columns),
             y=list(sorted_percentages),
             marker_color=colors,
@@ -176,7 +202,7 @@ class StatisticalVisualizer:
         
         return fig
     
-    def create_correlation_heatmap(self, correlation_data: Dict, correlation_type: str = 'pearson') -> go.Figure:
+    def create_correlation_heatmap(self, correlation_data: Dict, correlation_type: str = 'pearson') -> PlotlyFigure:
         """Create correlation heatmap"""
         
         if 'message' in correlation_data:
@@ -184,7 +210,7 @@ class StatisticalVisualizer:
         
         corr_matrix = correlation_data['correlation_matrices'][correlation_type]
         
-        fig = go.Figure(data=go.Heatmap(
+        fig = PlotlyFigure(data=go.Heatmap(
             z=corr_matrix.values,
             x=corr_matrix.columns,
             y=corr_matrix.columns,
@@ -209,7 +235,7 @@ class StatisticalVisualizer:
         
         return fig
     
-    def create_distribution_plots(self, df: pd.DataFrame, columns: List[str] = None) -> go.Figure:
+    def create_distribution_plots(self, df: pd.DataFrame, columns: List[str] = None) -> PlotlyFigure:
         """Create distribution plots for numerical columns"""
         
         numerical_cols = df.select_dtypes(include=[np.number]).columns
@@ -260,7 +286,7 @@ class StatisticalVisualizer:
         
         return fig
     
-    def create_box_plots(self, df: pd.DataFrame, columns: List[str] = None) -> go.Figure:
+    def create_box_plots(self, df: pd.DataFrame, columns: List[str] = None) -> PlotlyFigure:
         """Create box plots for outlier detection"""
         
         numerical_cols = df.select_dtypes(include=[np.number]).columns
@@ -270,7 +296,7 @@ class StatisticalVisualizer:
         if len(numerical_cols) == 0:
             return self._create_no_data_chart("No numerical columns available for box plot analysis")
         
-        fig = go.Figure()
+        fig = PlotlyFigure()
         
         for col in numerical_cols[:8]:  # Limit to 8 columns
             data = df[col].dropna()
@@ -292,7 +318,7 @@ class StatisticalVisualizer:
         
         return fig
     
-    def create_data_types_pie_chart(self, type_analysis: Dict) -> go.Figure:
+    def create_data_types_pie_chart(self, type_analysis: Dict) -> PlotlyFigure:
         """Create pie chart showing data type distribution"""
         
         type_counts = {}
@@ -303,7 +329,7 @@ class StatisticalVisualizer:
             else:
                 type_counts[current_type] = 1
         
-        fig = go.Figure(data=[go.Pie(
+        fig = PlotlyFigure(data=[go.Pie(
             labels=list(type_counts.keys()),
             values=list(type_counts.values()),
             hole=0.3,
@@ -352,10 +378,10 @@ class StatisticalVisualizer:
         
         return cards
     
-    def _create_no_data_chart(self, message: str) -> go.Figure:
+    def _create_no_data_chart(self, message: str) -> PlotlyFigure:
         """Create a placeholder chart when no data is available"""
         
-        fig = go.Figure()
+        fig = PlotlyFigure()
         
         fig.add_annotation(
             text=message,
@@ -376,10 +402,10 @@ class StatisticalVisualizer:
         return fig
     
     def create_comparative_distribution_plot(self, data_a: pd.Series, data_b: pd.Series, 
-                                           title: str, label_a: str, label_b: str) -> go.Figure:
+                                           title: str, label_a: str, label_b: str) -> PlotlyFigure:
         """Create comparative distribution plot for two datasets"""
         
-        fig = go.Figure()
+        fig = PlotlyFigure()
         
         # Add histograms for both datasets
         fig.add_trace(go.Histogram(
@@ -411,7 +437,7 @@ class StatisticalVisualizer:
         return fig
     
     def create_comparative_missing_data_chart(self, missing_a: Dict, missing_b: Dict, 
-                                            label_a: str, label_b: str) -> go.Figure:
+                                            label_a: str, label_b: str) -> PlotlyFigure:
         """Create comparative missing data chart"""
         
         # Extract column-wise missing percentages
@@ -439,7 +465,7 @@ class StatisticalVisualizer:
             else:
                 aligned_b.append(0)
         
-        fig = go.Figure()
+        fig = PlotlyFigure()
         
         fig.add_trace(go.Bar(
             x=all_columns,
@@ -470,10 +496,10 @@ class StatisticalVisualizer:
         return fig
     
     def create_comparative_histogram(self, data_a: pd.Series, data_b: pd.Series,
-                                   column_name: str, label_a: str, label_b: str) -> go.Figure:
+                                   column_name: str, label_a: str, label_b: str) -> PlotlyFigure:
         """Create comparative histogram for a specific column"""
         
-        fig = go.Figure()
+        fig = PlotlyFigure()
         
         # Calculate appropriate bins
         combined_data = pd.concat([data_a.dropna(), data_b.dropna()])
@@ -524,7 +550,7 @@ class StatisticalVisualizer:
         
         return fig
     
-    def create_missing_data_chart(self, missing_data_analysis: dict) -> go.Figure:
+    def create_missing_data_chart(self, missing_data_analysis: dict) -> PlotlyFigure:
         """Create missing data visualization chart"""
         
         column_missing = missing_data_analysis['column_missing_percentage']
@@ -535,7 +561,7 @@ class StatisticalVisualizer:
         if not cols_with_missing:
             return self._create_no_data_chart("No missing data found - excellent data quality!")
         
-        fig = go.Figure()
+        fig = PlotlyFigure()
         
         # Sort by missing percentage
         sorted_missing = dict(sorted(cols_with_missing.items(), key=lambda x: x[1], reverse=True))
@@ -560,7 +586,7 @@ class StatisticalVisualizer:
         
         return fig
     
-    def create_data_completeness_gauge(self, completeness_percentage: float) -> go.Figure:
+    def create_data_completeness_gauge(self, completeness_percentage: float) -> PlotlyFigure:
         """Create data completeness gauge chart"""
         
         # Determine color based on completeness
@@ -571,7 +597,7 @@ class StatisticalVisualizer:
         else:
             color = "red"
         
-        fig = go.Figure(go.Indicator(
+        fig = PlotlyFigure(go.Indicator(
             mode = "gauge+number+delta",
             value = completeness_percentage,
             domain = {'x': [0, 1], 'y': [0, 1]},
@@ -598,7 +624,7 @@ class StatisticalVisualizer:
         
         return fig
     
-    def create_duplicate_analysis_chart(self, duplicate_analysis: dict) -> go.Figure:
+    def create_duplicate_analysis_chart(self, duplicate_analysis: dict) -> PlotlyFigure:
         """Create duplicate analysis chart"""
         
         exact_count = duplicate_analysis.get('exact_duplicates', {}).get('count', 0)
@@ -607,7 +633,7 @@ class StatisticalVisualizer:
         if exact_count == 0 and near_count == 0:
             return self._create_no_data_chart("No duplicates found - excellent data quality!")
         
-        fig = go.Figure()
+        fig = PlotlyFigure()
         
         categories = ['Exact Duplicates', 'Near Duplicates']
         values = [exact_count, near_count]
@@ -630,7 +656,7 @@ class StatisticalVisualizer:
         
         return fig
     
-    def create_data_type_issues_chart(self, data_type_analysis: dict) -> go.Figure:
+    def create_data_type_issues_chart(self, data_type_analysis: dict) -> PlotlyFigure:
         """Create data type issues chart"""
         
         # Count issues by type
@@ -650,7 +676,7 @@ class StatisticalVisualizer:
         if not issue_counts:
             return self._create_no_data_chart("No data type issues found - excellent data quality!")
         
-        fig = go.Figure()
+        fig = PlotlyFigure()
         
         colors = ['red', 'orange', 'yellow'][:len(issue_counts)]
         
@@ -675,13 +701,13 @@ class StatisticalVisualizer:
     # BUSINESS INTELLIGENCE VISUALIZATIONS
     # ============================================================================
     
-    def create_revenue_trend_chart(self, sales_data: Dict, amount_column: str) -> go.Figure:
+    def create_revenue_trend_chart(self, sales_data: Dict, amount_column: str) -> PlotlyFigure:
         """Create revenue trend chart over time"""
         
         if 'time_trends' not in sales_data or not sales_data['time_trends']:
             return self._create_no_data_chart("No time trend data available")
         
-        fig = go.Figure()
+        fig = PlotlyFigure()
         
         for date_col, trend_data in sales_data['time_trends'].items():
             if 'monthly_revenue' in trend_data:
@@ -711,7 +737,7 @@ class StatisticalVisualizer:
         
         return fig
     
-    def create_category_performance_chart(self, sales_data: Dict, amount_column: str) -> go.Figure:
+    def create_category_performance_chart(self, sales_data: Dict, amount_column: str) -> PlotlyFigure:
         """Create category performance comparison chart"""
         
         if 'category_performance' not in sales_data:
@@ -774,7 +800,7 @@ class StatisticalVisualizer:
         
         return fig
     
-    def create_customer_segmentation_chart(self, customer_data: Dict) -> go.Figure:
+    def create_customer_segmentation_chart(self, customer_data: Dict) -> PlotlyFigure:
         """Create customer segmentation visualization"""
         
         if 'customer_segmentation' not in customer_data:
@@ -829,7 +855,7 @@ class StatisticalVisualizer:
         
         return fig
     
-    def create_product_performance_chart(self, product_data: Dict) -> go.Figure:
+    def create_product_performance_chart(self, product_data: Dict) -> PlotlyFigure:
         """Create product performance analysis chart"""
         
         if not product_data or 'message' in product_data:
@@ -895,7 +921,7 @@ class StatisticalVisualizer:
         
         return fig
     
-    def create_satisfaction_analysis_chart(self, customer_data: Dict) -> go.Figure:
+    def create_satisfaction_analysis_chart(self, customer_data: Dict) -> PlotlyFigure:
         """Create customer satisfaction analysis chart"""
         
         if 'satisfaction_analysis' not in customer_data:
@@ -1025,7 +1051,7 @@ class StatisticalVisualizer:
         
         return cards
     
-    def create_revenue_distribution_chart(self, sales_data: Dict, amount_column: str) -> go.Figure:
+    def create_revenue_distribution_chart(self, sales_data: Dict, amount_column: str) -> PlotlyFigure:
         """Create revenue distribution analysis chart"""
         
         if 'revenue_distribution' not in sales_data:
@@ -1081,7 +1107,7 @@ class StatisticalVisualizer:
         return fig
     
     def create_comparative_business_chart(self, data_a: Dict, data_b: Dict, 
-                                        label_a: str, label_b: str, metric: str) -> go.Figure:
+                                        label_a: str, label_b: str, metric: str) -> PlotlyFigure:
         """Create comparative business metrics chart"""
         
         if metric == 'revenue_trends' and 'time_trends' in data_a and 'time_trends' in data_b:
@@ -1092,10 +1118,10 @@ class StatisticalVisualizer:
             return self._create_no_data_chart(f"Comparative {metric} analysis not available")
     
     def _create_comparative_revenue_trends(self, data_a: Dict, data_b: Dict, 
-                                         label_a: str, label_b: str) -> go.Figure:
+                                         label_a: str, label_b: str) -> PlotlyFigure:
         """Create comparative revenue trends chart"""
         
-        fig = go.Figure()
+        fig = PlotlyFigure()
         
         # Extract revenue trends from both datasets
         trends_a = list(data_a['time_trends'].values())[0].get('monthly_revenue', {})
@@ -1142,7 +1168,7 @@ class StatisticalVisualizer:
         return fig
     
     def _create_comparative_category_performance(self, data_a: Dict, data_b: Dict, 
-                                               label_a: str, label_b: str) -> go.Figure:
+                                               label_a: str, label_b: str) -> PlotlyFigure:
         """Create comparative category performance chart"""
         
         # Extract category performance data
@@ -1156,7 +1182,7 @@ class StatisticalVisualizer:
         revenues_a = [cat_data_a.get(cat, 0) for cat in all_categories]
         revenues_b = [cat_data_b.get(cat, 0) for cat in all_categories]
         
-        fig = go.Figure()
+        fig = PlotlyFigure()
         
         fig.add_trace(go.Bar(
             x=all_categories,
@@ -1186,7 +1212,7 @@ class StatisticalVisualizer:
         
         return fig
     
-    def create_financial_ratios_dashboard(self, financial_ratios: Dict) -> go.Figure:
+    def create_financial_ratios_dashboard(self, financial_ratios: Dict) -> PlotlyFigure:
         """Create comprehensive financial ratios dashboard with gauge charts"""
         
         fig = make_subplots(
@@ -1327,10 +1353,10 @@ class StatisticalVisualizer:
         
         return fig
     
-    def create_kpi_scorecard(self, business_kpis: Dict) -> go.Figure:
+    def create_kpi_scorecard(self, business_kpis: Dict) -> PlotlyFigure:
         """Create KPI scorecard with progress bars and alerts"""
         
-        fig = go.Figure()
+        fig = PlotlyFigure()
         
         kpi_data = []
         colors = []
@@ -1383,10 +1409,10 @@ class StatisticalVisualizer:
         
         return fig
     
-    def create_early_warning_alerts(self, alerts_data: Dict) -> go.Figure:
+    def create_early_warning_alerts(self, alerts_data: Dict) -> PlotlyFigure:
         """Create early warning indicators dashboard"""
         
-        fig = go.Figure()
+        fig = PlotlyFigure()
         
         # Extract alerts
         critical_alerts = alerts_data.get('critical_alerts', [])
@@ -1432,14 +1458,14 @@ class StatisticalVisualizer:
         
         return fig
     
-    def create_sector_performance_heatmap(self, sector_data: Dict) -> go.Figure:
+    def create_sector_performance_heatmap(self, sector_data: Dict) -> PlotlyFigure:
         """Create sector performance heatmap"""
         
         sector_rankings = sector_data.get('sector_rankings', [])
         
         if not sector_rankings:
             # Create empty heatmap
-            fig = go.Figure(data=go.Heatmap(
+            fig = PlotlyFigure(data=go.Heatmap(
                 z=[[0]],
                 x=['No Data'],
                 y=['No Sectors'],
@@ -1463,7 +1489,7 @@ class StatisticalVisualizer:
                 ]
                 heatmap_data.append(row)
             
-            fig = go.Figure(data=go.Heatmap(
+            fig = PlotlyFigure(data=go.Heatmap(
                 z=heatmap_data,
                 x=metrics,
                 y=sectors,
@@ -1483,7 +1509,7 @@ class StatisticalVisualizer:
         
         return fig
     
-    def create_risk_assessment_radar(self, risk_data: Dict) -> go.Figure:
+    def create_risk_assessment_radar(self, risk_data: Dict) -> PlotlyFigure:
         """Create risk assessment radar chart"""
         
         risk_factors = risk_data.get('risk_factors', [])
@@ -1498,7 +1524,7 @@ class StatisticalVisualizer:
             severity_map = {'Low': 1, 'Medium': 2, 'High': 3}
             values = [severity_map.get(factor.get('severity', 'Low'), 1) for factor in risk_factors]
         
-        fig = go.Figure()
+        fig = PlotlyFigure()
         
         fig.add_trace(go.Scatterpolar(
             r=values,
@@ -1525,10 +1551,10 @@ class StatisticalVisualizer:
         
         return fig
     
-    def create_data_quality_progress_bar(self, governance_data: Dict) -> go.Figure:
+    def create_data_quality_progress_bar(self, governance_data: Dict) -> PlotlyFigure:
         """Create data quality progress bar"""
         
-        fig = go.Figure()
+        fig = PlotlyFigure()
         
         data_quality = governance_data.get('data_quality_score', {})
         score = data_quality.get('score', 0)
@@ -1599,7 +1625,7 @@ class InteractiveDashboard:
         """Identify categorical columns in dataframe"""
         return df.select_dtypes(include=['object', 'category']).columns.tolist()
     
-    def create_interactive_comparison_chart(self, column: str, chart_type: str = "bar") -> go.Figure:
+    def create_interactive_comparison_chart(self, column: str, chart_type: str = "bar") -> PlotlyFigure:
         """
         Create interactive comparison chart with drill-down capabilities
         """
@@ -1608,7 +1634,7 @@ class InteractiveDashboard:
         data_a = self.df_a[column].dropna() if column in self.df_a.columns else pd.Series([])
         data_b = self.df_b[column].dropna() if column in self.df_b.columns else pd.Series([])
         
-        fig = go.Figure()
+        fig = PlotlyFigure()
         
         if column in self.numeric_cols_a or column in self.numeric_cols_b:
             # Numeric comparison with detailed hover
@@ -1745,14 +1771,14 @@ class InteractiveDashboard:
         
         return fig
     
-    def create_drill_down_scatter(self, x_col: str, y_col: str, color_col: str = None) -> go.Figure:
+    def create_drill_down_scatter(self, x_col: str, y_col: str, color_col: str = None) -> PlotlyFigure:
         """Create interactive scatter plot with drill-down"""
         
         title = f"Interactive Scatter: {y_col} vs {x_col}"
         if color_col:
             title += f" (colored by {color_col})"
         
-        fig = go.Figure()
+        fig = PlotlyFigure()
         
         # Dataset A scatter
         if x_col in self.df_a.columns and y_col in self.df_a.columns:
@@ -1811,7 +1837,7 @@ class InteractiveDashboard:
         
         return fig
     
-    def export_chart_with_data(self, fig: go.Figure, include_data: bool = True) -> Dict[str, Any]:
+    def export_chart_with_data(self, fig: PlotlyFigure, include_data: bool = True) -> Dict[str, Any]:
         """Export chart with optional underlying data"""
         
         # Generate chart image
@@ -1840,12 +1866,12 @@ class InteractiveDashboard:
         
         return export_data
     
-    def create_single_dataset_bar_chart(self, df: pd.DataFrame, x_col: str, y_col: str, color_col: str = None) -> go.Figure:
+    def create_single_dataset_bar_chart(self, df: pd.DataFrame, x_col: str, y_col: str, color_col: str = None) -> PlotlyFigure:
         """Create interactive bar chart for a single dataset"""
         
         title = f"Interactive Bar Chart: {y_col} by {x_col}"
         
-        fig = go.Figure()
+        fig = PlotlyFigure()
         
         # Clean data
         df_clean = df.dropna(subset=[x_col, y_col])
@@ -1921,14 +1947,14 @@ class InteractiveDashboard:
         
         return fig
     
-    def create_single_dataset_scatter(self, df: pd.DataFrame, x_col: str, y_col: str, color_col: str = None) -> go.Figure:
+    def create_single_dataset_scatter(self, df: pd.DataFrame, x_col: str, y_col: str, color_col: str = None) -> PlotlyFigure:
         """Create interactive scatter plot for a single dataset"""
         
         title = f"Interactive Scatter: {y_col} vs {x_col}"
         if color_col:
             title += f" (colored by {color_col})"
         
-        fig = go.Figure()
+        fig = PlotlyFigure()
         
         # Clean data
         df_clean = df.dropna(subset=[x_col, y_col])
@@ -1992,7 +2018,7 @@ class ChartExporter:
     """Enhanced utility class for chart export functionality with multiple format support"""
     
     @staticmethod
-    def export_single_chart(fig: go.Figure, filename: str = None, 
+    def export_single_chart(fig: PlotlyFigure, filename: str = None, 
                            format: str = "png", width: int = 1200, height: int = 800) -> bytes:
         """Export single chart to specified format"""
         

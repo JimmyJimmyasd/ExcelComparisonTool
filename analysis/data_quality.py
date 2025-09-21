@@ -4,11 +4,24 @@ from typing import Dict, List, Tuple, Any, Optional
 import re
 from fuzzywuzzy import fuzz
 from collections import Counter
-import seaborn as sns
-import matplotlib.pyplot as plt
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+
+# Handle visualization imports gracefully for deployment compatibility
+try:
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
+    print("Warning: matplotlib/seaborn not available. Some visualizations will be disabled.")
+
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+    print("Warning: plotly not available. Interactive charts will be disabled.")
 
 class DataQualityAssessment:
     """Comprehensive data quality analysis for Excel data"""

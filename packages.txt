@@ -1,7 +1,0 @@
-build-essential
-gcc
-gfortran
-libatlas-base-dev
-liblapack-dev
-libopenblas-dev
-python3-dev

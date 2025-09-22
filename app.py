@@ -10,6 +10,7 @@ from datetime import datetime
 from utils import suggest_column_mappings, get_column_info
 from analysis.statistical_analysis import StatisticalAnalyzer
 from analysis.visualization import StatisticalVisualizer
+from analysis.interactive_dashboard import InteractiveDashboard
 
 # Configure Streamlit page
 st.set_page_config(
@@ -6516,15 +6517,8 @@ Dataset B Risk Level: {exec_summary_b.get('risk_assessment', {}).get('overall_ri
                             if st.button("🎨 Generate Interactive Chart", key="generate_interactive"):
                                 with st.spinner("Creating interactive visualization..."):
                                     try:
-                                        from analysis.visualization import InteractiveDashboard, ChartExporter
-                                        
-                                        # Initialize dashboard with both datasets
-                                        dashboard = InteractiveDashboard(
-                                            comparator.df_a, 
-                                            comparator.df_b,
-                                            display_sheet_a,
-                                            display_sheet_b
-                                        )
+                                        # Use the already imported InteractiveDashboard class
+                                        dashboard = InteractiveDashboard()
                                         
                                         # Prepare data
                                         chart_data = selected_df.copy()
@@ -6532,13 +6526,13 @@ Dataset B Risk Level: {exec_summary_b.get('risk_assessment', {}).get('overall_ri
                                         
                                         # Create chart based on selection
                                         if chart_type == "Interactive Bar Chart":
-                                            fig = dashboard.create_single_dataset_bar_chart(
+                                            fig = dashboard.create_bar_chart(
                                                 chart_data, x_column, y_column, color_col
                                             )
                                             st.plotly_chart(fig, use_container_width=True)
                                             
                                         elif chart_type == "Drill-Down Scatter Plot":
-                                            fig = dashboard.create_single_dataset_scatter(
+                                            fig = dashboard.create_scatter_plot(
                                                 chart_data, x_column, y_column, color_col
                                             )
                                             st.plotly_chart(fig, use_container_width=True)
@@ -6551,8 +6545,8 @@ Dataset B Risk Level: {exec_summary_b.get('risk_assessment', {}).get('overall_ri
                                                 chart_data_time = chart_data_time.dropna(subset=[x_column])
                                                 
                                                 if len(chart_data_time) > 0:
-                                                    # Use scatter plot for time series with line mode
-                                                    fig = dashboard.create_single_dataset_scatter(
+                                                    # Use line chart for time series
+                                                    fig = dashboard.create_line_chart(
                                                         chart_data_time, x_column, y_column, color_col
                                                     )
                                                     # Update to line chart for time series
@@ -6692,23 +6686,1742 @@ Dataset B Risk Level: {exec_summary_b.get('risk_assessment', {}).get('overall_ri
         st.header("🔍 Advanced Data Analysis")
         st.markdown("**Statistical analysis, data quality assessment, and insights**")
         
-        if comparator.df_a is not None or comparator.df_b is not None:
-            # Show data analysis options
-            analysis_tabs = st.tabs(["📊 Statistical Analysis", "🔍 Data Quality", "📈 Trends & Patterns"])
+        # Show data analysis options
+        st.info("🎯 **NEW FEATURES ADDED:** Formula Analysis and Formatting Comparison tabs are now available below!")
+        analysis_tabs = st.tabs(["📊 Statistical Analysis", "🔍 Data Quality", "📈 Trends & Patterns", "📝 Formula Analysis", "🎨 Formatting Comparison"])
+        
+        with analysis_tabs[0]:
+            st.subheader("📊 Statistical Analysis Dashboard")
             
-            with analysis_tabs[0]:
-                st.subheader("📊 Statistical Analysis")
-                st.info("Coming soon: Descriptive statistics, correlation analysis, and distribution analysis")
+            if comparator.df_a is not None or comparator.df_b is not None:
+                # Initialize analyzers
+                if 'statistical_analyzer' not in st.session_state:
+                    st.session_state.statistical_analyzer = StatisticalAnalyzer()
+                if 'interactive_dashboard' not in st.session_state:
+                    st.session_state.interactive_dashboard = InteractiveDashboard()
+                
+                analyzer = st.session_state.statistical_analyzer
+                dashboard = st.session_state.interactive_dashboard
+                
+                # Analysis scope selection
+                analysis_col1, analysis_col2 = st.columns([2, 1])
+                
+                with analysis_col1:
+                    analysis_scope = st.selectbox(
+                        "📋 Select Analysis Scope:",
+                        ["Dataset A Analysis", "Dataset B Analysis", "Comparative Analysis", "Combined Analysis"],
+                        help="Choose which datasets to analyze"
+                    )
+                
+                with analysis_col2:
+                    show_advanced = st.checkbox("🔬 Advanced Statistics", value=False)
+                    auto_refresh = st.checkbox("🔄 Auto-refresh charts", value=True)
+                
+                # Perform analysis based on scope
+                if st.button("🚀 Run Statistical Analysis", type="primary", key="run_statistical_analysis"):
+                    with st.spinner("Performing comprehensive statistical analysis..."):
+                        
+                        # Get current sheet names
+                        sheet_a_name = st.session_state.get('sheet_a', 'Dataset A')
+                        sheet_b_name = st.session_state.get('sheet_b', 'Dataset B')
+                        
+                        if analysis_scope == "Dataset A Analysis":
+                            # Analyze Dataset A
+                            analysis_results = analyzer.analyze_dataframe(comparator.df_a, sheet_a_name)
+                            charts = dashboard.create_comprehensive_dashboard(analysis_results)
+                            st.session_state.statistical_results = {
+                                'type': 'single',
+                                'results': analysis_results,
+                                'charts': charts,
+                                'scope': 'Dataset A'
+                            }
+                            
+                        elif analysis_scope == "Dataset B Analysis":
+                            # Analyze Dataset B
+                            analysis_results = analyzer.analyze_dataframe(comparator.df_b, sheet_b_name)
+                            charts = dashboard.create_comprehensive_dashboard(analysis_results)
+                            st.session_state.statistical_results = {
+                                'type': 'single',
+                                'results': analysis_results,
+                                'charts': charts,
+                                'scope': 'Dataset B'
+                            }
+                            
+                        elif analysis_scope == "Comparative Analysis":
+                            # Compare datasets
+                            comparison_results = analyzer.compare_datasets_statistically(
+                                comparator.df_a, comparator.df_b, sheet_a_name, sheet_b_name
+                            )
+                            charts = dashboard.create_comprehensive_dashboard(
+                                comparison_results['datasets'][sheet_a_name],
+                                comparison_results
+                            )
+                            st.session_state.statistical_results = {
+                                'type': 'comparison',
+                                'results': comparison_results,
+                                'charts': charts,
+                                'scope': 'Comparative'
+                            }
+                            
+                        elif analysis_scope == "Combined Analysis":
+                            # Analyze both datasets separately
+                            results_a = analyzer.analyze_dataframe(comparator.df_a, sheet_a_name)
+                            results_b = analyzer.analyze_dataframe(comparator.df_b, sheet_b_name)
+                            charts_a = dashboard.create_comprehensive_dashboard(results_a)
+                            charts_b = dashboard.create_comprehensive_dashboard(results_b)
+                            
+                            st.session_state.statistical_results = {
+                                'type': 'combined',
+                                'results_a': results_a,
+                                'results_b': results_b,
+                                'charts_a': charts_a,
+                                'charts_b': charts_b,
+                                'scope': 'Combined'
+                            }
+                        
+                        st.success("✅ Statistical analysis completed!")
+                
+                # Display results if available
+                if 'statistical_results' in st.session_state:
+                    results = st.session_state.statistical_results
+                    
+                    st.divider()
+                    st.subheader("📈 Analysis Results & Interactive Dashboard")
+                    
+                    if results['type'] == 'single':
+                        # Single dataset analysis
+                        st.write(f"**Analysis for: {results['scope']}**")
+                        
+                        # Summary metrics
+                        analysis_data = results['results']
+                        basic_info = analysis_data['basic_info']
+                        missing_summary = analysis_data['missing_data_analysis']['_summary']
+                        
+                        # Key metrics cards
+                        metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+                        
+                        with metric_col1:
+                            st.metric("📊 Total Rows", f"{basic_info['total_rows']:,}")
+                        with metric_col2:
+                            st.metric("📋 Columns", f"{basic_info['total_columns']:,}")
+                        with metric_col3:
+                            completeness = 100 - missing_summary['overall_missing_percentage']
+                            st.metric("✅ Completeness", f"{completeness:.1f}%")
+                        with metric_col4:
+                            memory_mb = basic_info['memory_usage'] / 1024 / 1024
+                            st.metric("💾 Memory", f"{memory_mb:.1f} MB")
+                        
+                        # Interactive charts
+                        chart_tabs = st.tabs([
+                            "🎯 Overview", "🕳️ Missing Data", "🔗 Correlations", 
+                            "📊 Distributions", "⚠️ Outliers", "🎯 Data Quality"
+                        ])
+                        
+                        charts = results['charts']
+                        
+                        with chart_tabs[0]:
+                            if 'overview' in charts:
+                                st.plotly_chart(charts['overview'], use_container_width=True, key="overview_single")
+                        
+                        with chart_tabs[1]:
+                            if 'missing_data' in charts:
+                                st.plotly_chart(charts['missing_data'], use_container_width=True, key="missing_single")
+                        
+                        with chart_tabs[2]:
+                            if 'correlation' in charts:
+                                st.plotly_chart(charts['correlation'], use_container_width=True, key="corr_single")
+                        
+                        with chart_tabs[3]:
+                            if 'distributions' in charts:
+                                st.plotly_chart(charts['distributions'], use_container_width=True, key="dist_single")
+                        
+                        with chart_tabs[4]:
+                            if 'outliers' in charts:
+                                st.plotly_chart(charts['outliers'], use_container_width=True, key="outliers_single")
+                        
+                        with chart_tabs[5]:
+                            if 'data_quality' in charts:
+                                st.plotly_chart(charts['data_quality'], use_container_width=True, key="quality_single")
+                    
+                    elif results['type'] == 'comparison':
+                        # Comparative analysis
+                        st.write("**Comparative Statistical Analysis**")
+                        
+                        comparison_data = results['results']
+                        datasets = comparison_data['datasets']
+                        
+                        # Comparison summary
+                        comp_summary = comparison_data['comparison_summary']
+                        basic_comp = comp_summary['basic_comparison']
+                        
+                        # Comparison metrics
+                        comp_col1, comp_col2, comp_col3 = st.columns(3)
+                        
+                        with comp_col1:
+                            row_diff = basic_comp['shape_difference']['rows']
+                            st.metric("📊 Row Difference", f"{row_diff:+,}")
+                        
+                        with comp_col2:
+                            col_diff = basic_comp['shape_difference']['columns']
+                            st.metric("📋 Column Difference", f"{col_diff:+}")
+                        
+                        with comp_col3:
+                            size_ratio = basic_comp['size_comparison']['size_ratio']
+                            st.metric("📏 Size Ratio", f"{size_ratio:.2f}x")
+                        
+                        # Interactive comparison charts
+                        comp_tabs = st.tabs([
+                            "🔄 Comparison Overview", "📊 Statistical Tests", 
+                            "🕳️ Missing Data Comparison", "📈 Quality Comparison"
+                        ])
+                        
+                        charts = results['charts']
+                        
+                        with comp_tabs[0]:
+                            if 'comparison' in charts:
+                                st.plotly_chart(charts['comparison'], use_container_width=True, key="comp_overview")
+                        
+                        with comp_tabs[1]:
+                            # Statistical test results
+                            if 'statistical_tests' in comparison_data:
+                                st.subheader("🧪 Statistical Test Results")
+                                test_results = comparison_data['statistical_tests']
+                                
+                                if test_results:
+                                    # Create a summary table
+                                    test_summary_data = []
+                                    for column, tests in test_results.items():
+                                        if 'error' not in tests:
+                                            means_test = tests.get('means_comparison', {})
+                                            dist_test = tests.get('distribution_tests', {})
+                                            
+                                            test_summary_data.append({
+                                                'Column': column,
+                                                'Mean A': f"{means_test.get('Dataset A_mean', 0):.3f}",
+                                                'Mean B': f"{means_test.get('Dataset B_mean', 0):.3f}",
+                                                'Significant Difference': "✅ Yes" if means_test.get('significant_difference', False) else "❌ No",
+                                                'T-test p-value': f"{means_test.get('t_test_p_value', 1):.4f}",
+                                                'Different Distributions': "✅ Yes" if dist_test.get('distributions_significantly_different', False) else "❌ No"
+                                            })
+                                    
+                                    if test_summary_data:
+                                        test_df = pd.DataFrame(test_summary_data)
+                                        st.dataframe(test_df, use_container_width=True)
+                                    else:
+                                        st.info("No statistical tests could be performed on common columns")
+                                else:
+                                    st.info("No common numerical columns found for statistical testing")
+                        
+                        with comp_tabs[2]:
+                            if 'missing_data' in charts:
+                                st.plotly_chart(charts['missing_data'], use_container_width=True, key="missing_comp")
+                        
+                        with comp_tabs[3]:
+                            if 'data_quality' in charts:
+                                st.plotly_chart(charts['data_quality'], use_container_width=True, key="quality_comp")
+                    
+                    elif results['type'] == 'combined':
+                        # Combined analysis (both datasets)
+                        st.write("**Combined Analysis - Both Datasets**")
+                        
+                        # Dataset comparison
+                        dataset_tabs = st.tabs(["📋 Dataset A", "📋 Dataset B"])
+                        
+                        with dataset_tabs[0]:
+                            st.subheader("📊 Dataset A Analysis")
+                            
+                            # Dataset A metrics
+                            basic_info_a = results['results_a']['basic_info']
+                            missing_a = results['results_a']['missing_data_analysis']['_summary']
+                            
+                            a_col1, a_col2, a_col3 = st.columns(3)
+                            with a_col1:
+                                st.metric("📊 Rows", f"{basic_info_a['total_rows']:,}")
+                            with a_col2:
+                                st.metric("📋 Columns", f"{basic_info_a['total_columns']:,}")
+                            with a_col3:
+                                completeness_a = 100 - missing_a['overall_missing_percentage']
+                                st.metric("✅ Completeness", f"{completeness_a:.1f}%")
+                            
+                            # Charts for Dataset A
+                            if 'overview' in results['charts_a']:
+                                st.plotly_chart(results['charts_a']['overview'], use_container_width=True, key="overview_a")
+                        
+                        with dataset_tabs[1]:
+                            st.subheader("📊 Dataset B Analysis")
+                            
+                            # Dataset B metrics
+                            basic_info_b = results['results_b']['basic_info']
+                            missing_b = results['results_b']['missing_data_analysis']['_summary']
+                            
+                            b_col1, b_col2, b_col3 = st.columns(3)
+                            with b_col1:
+                                st.metric("📊 Rows", f"{basic_info_b['total_rows']:,}")
+                            with b_col2:
+                                st.metric("📋 Columns", f"{basic_info_b['total_columns']:,}")
+                            with b_col3:
+                                completeness_b = 100 - missing_b['overall_missing_percentage']
+                                st.metric("✅ Completeness", f"{completeness_b:.1f}%")
+                            
+                            # Charts for Dataset B
+                            if 'overview' in results['charts_b']:
+                                st.plotly_chart(results['charts_b']['overview'], use_container_width=True, key="overview_b")
+                
+                # Text summary export
+                if 'statistical_results' in st.session_state:
+                    st.divider()
+                    with st.expander("📋 Export Statistical Summary"):
+                        results = st.session_state.statistical_results
+                        
+                        if results['type'] == 'single':
+                            summary_text = analyzer.generate_statistical_summary(
+                                comparator.df_a if results['scope'] == 'Dataset A' else comparator.df_b,
+                                results['scope']
+                            )
+                        else:
+                            summary_text = "Comprehensive statistical analysis completed. See interactive charts above for detailed insights."
+                        
+                        st.text_area("Statistical Summary Report", summary_text, height=200)
+                        
+                        if st.button("📄 Download Summary Report"):
+                            st.download_button(
+                                label="Download Statistical Report",
+                                data=summary_text,
+                                file_name=f"statistical_analysis_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                                mime="text/plain"
+                            )
+            else:
+                st.info("📁 Please upload data files in the sidebar to enable statistical analysis")
+        
+        with analysis_tabs[1]:
+            st.subheader("🔍 Data Quality Assessment")
             
-            with analysis_tabs[1]:
-                st.subheader("🔍 Data Quality Assessment")  
-                st.info("Coming soon: Missing data analysis, duplicate detection, and data validation")
+            if comparator.df_a is not None or comparator.df_b is not None:
+                # Initialize analyzers
+                if 'statistical_analyzer' not in st.session_state:
+                    st.session_state.statistical_analyzer = StatisticalAnalyzer()
+                
+                analyzer = st.session_state.statistical_analyzer
+                
+                # Quality assessment options
+                quality_col1, quality_col2 = st.columns([2, 1])
+                
+                with quality_col1:
+                    dataset_choice = st.selectbox(
+                        "📊 Select Dataset for Quality Assessment:",
+                        ["Dataset A", "Dataset B", "Both Datasets"],
+                        help="Choose which dataset to assess for data quality"
+                    )
+                
+                with quality_col2:
+                    st.write("**Assessment Options:**")
+                    include_recommendations = st.checkbox("Include Recommendations", value=True)
+                    detailed_analysis = st.checkbox("Detailed Analysis", value=False)
+                
+                # Run quality assessment
+                if st.button("🔍 Assess Data Quality", type="primary", key="assess_data_quality"):
+                    with st.spinner("Assessing data quality..."):
+                        
+                        # Get current sheet names
+                        sheet_a_name = st.session_state.get('sheet_a', 'Dataset A')
+                        sheet_b_name = st.session_state.get('sheet_b', 'Dataset B')
+                        
+                        if dataset_choice == "Dataset A":
+                            analysis_results = analyzer.analyze_dataframe(comparator.df_a, sheet_a_name)
+                            st.session_state.quality_results = {
+                                'type': 'single',
+                                'dataset': 'A',
+                                'results': analysis_results
+                            }
+                            
+                        elif dataset_choice == "Dataset B":
+                            analysis_results = analyzer.analyze_dataframe(comparator.df_b, sheet_b_name)
+                            st.session_state.quality_results = {
+                                'type': 'single',
+                                'dataset': 'B',
+                                'results': analysis_results
+                            }
+                            
+                        elif dataset_choice == "Both Datasets":
+                            results_a = analyzer.analyze_dataframe(comparator.df_a, sheet_a_name)
+                            results_b = analyzer.analyze_dataframe(comparator.df_b, sheet_b_name)
+                            st.session_state.quality_results = {
+                                'type': 'both',
+                                'results_a': results_a,
+                                'results_b': results_b
+                            }
+                        
+                        st.success("✅ Data quality assessment completed!")
+                
+                # Display quality assessment results
+                if 'quality_results' in st.session_state:
+                    results = st.session_state.quality_results
+                    
+                    st.divider()
+                    st.subheader("📊 Data Quality Report")
+                    
+                    if results['type'] == 'single':
+                        # Single dataset quality assessment
+                        data = results['results']
+                        dataset_name = f"Dataset {results['dataset']}"
+                        
+                        # Overall quality score
+                        missing_pct = data['missing_data_analysis']['_summary']['overall_missing_percentage']
+                        completeness_score = 100 - missing_pct
+                        
+                        # Determine quality grade
+                        if completeness_score >= 95:
+                            quality_grade = "A"
+                            quality_color = "green"
+                        elif completeness_score >= 85:
+                            quality_grade = "B"
+                            quality_color = "blue"
+                        elif completeness_score >= 70:
+                            quality_grade = "C"
+                            quality_color = "orange"
+                        else:
+                            quality_grade = "D"
+                            quality_color = "red"
+                        
+                        # Quality metrics
+                        quality_col1, quality_col2, quality_col3, quality_col4 = st.columns(4)
+                        
+                        with quality_col1:
+                            st.metric(
+                                "🎯 Quality Grade", 
+                                quality_grade, 
+                                help="Overall data quality grade based on completeness and consistency"
+                            )
+                        
+                        with quality_col2:
+                            st.metric("✅ Completeness", f"{completeness_score:.1f}%")
+                        
+                        with quality_col3:
+                            complete_rows = data['missing_data_analysis']['_summary']['complete_rows']
+                            total_rows = data['basic_info']['total_rows']
+                            st.metric("📋 Complete Rows", f"{complete_rows:,} ({complete_rows/total_rows*100:.1f}%)")
+                        
+                        with quality_col4:
+                            total_missing = data['missing_data_analysis']['_summary']['total_missing_cells']
+                            st.metric("🕳️ Missing Cells", f"{total_missing:,}")
+                        
+                        # Detailed quality analysis tabs
+                        quality_tabs = st.tabs([
+                            "🕳️ Missing Data", "📊 Data Types", "⚠️ Outliers", 
+                            "📈 Column Analysis", "💡 Recommendations"
+                        ])
+                        
+                        with quality_tabs[0]:
+                            st.subheader("🕳️ Missing Data Analysis")
+                            
+                            # Missing data by column
+                            missing_data = []
+                            for col, info in data['missing_data_analysis'].items():
+                                if col != '_summary':
+                                    missing_data.append({
+                                        'Column': col,
+                                        'Missing Count': info['missing_count'],
+                                        'Missing %': info['missing_percentage'],
+                                        'Present Count': info['present_count'],
+                                        'Status': '🔴 Critical' if info['missing_percentage'] > 50 else 
+                                                 '🟡 Warning' if info['missing_percentage'] > 20 else 
+                                                 '🟢 Good'
+                                    })
+                            
+                            if missing_data:
+                                missing_df = pd.DataFrame(missing_data)
+                                st.dataframe(missing_df, use_container_width=True)
+                                
+                                # Missing data chart
+                                if 'interactive_dashboard' in st.session_state:
+                                    dashboard = st.session_state.interactive_dashboard
+                                    charts = dashboard.create_comprehensive_dashboard(data)
+                                    if 'missing_data' in charts:
+                                        st.plotly_chart(charts['missing_data'], use_container_width=True, key="quality_missing")
+                        
+                        with quality_tabs[1]:
+                            st.subheader("📊 Data Types Analysis")
+                            
+                            # Data type recommendations
+                            type_data = []
+                            for col, info in data['data_types_analysis'].items():
+                                suggestions = ", ".join(info['suggestions']) if info['suggestions'] else "Optimal"
+                                type_data.append({
+                                    'Column': col,
+                                    'Current Type': info['current_type'],
+                                    'Unique Values': info['unique_values'],
+                                    'Memory Usage': f"{info['memory_usage']:,} bytes",
+                                    'Recommendations': suggestions
+                                })
+                            
+                            if type_data:
+                                type_df = pd.DataFrame(type_data)
+                                st.dataframe(type_df, use_container_width=True)
+                        
+                        with quality_tabs[2]:
+                            st.subheader("⚠️ Outlier Analysis")
+                            
+                            if 'numerical_analysis' in data and 'message' not in data['numerical_analysis']:
+                                # Outlier summary
+                                outlier_data = []
+                                for col, info in data['numerical_analysis'].items():
+                                    outlier_data.append({
+                                        'Column': col,
+                                        'Outliers Count': info['outliers_count'],
+                                        'Outliers %': f"{info['outliers_percentage']:.2f}%",
+                                        'Lower Bound': f"{info['outlier_bounds']['lower']:.3f}",
+                                        'Upper Bound': f"{info['outlier_bounds']['upper']:.3f}",
+                                        'Status': '🔴 High' if info['outliers_percentage'] > 10 else 
+                                                 '🟡 Medium' if info['outliers_percentage'] > 5 else 
+                                                 '🟢 Low'
+                                    })
+                                
+                                if outlier_data:
+                                    outlier_df = pd.DataFrame(outlier_data)
+                                    st.dataframe(outlier_df, use_container_width=True)
+                                    
+                                    # Outlier visualization
+                                    if 'interactive_dashboard' in st.session_state:
+                                        dashboard = st.session_state.interactive_dashboard
+                                        charts = dashboard.create_comprehensive_dashboard(data)
+                                        if 'outliers' in charts:
+                                            st.plotly_chart(charts['outliers'], use_container_width=True, key="quality_outliers")
+                            else:
+                                st.info("No numerical columns found for outlier analysis")
+                        
+                        with quality_tabs[3]:
+                            st.subheader("📈 Column Analysis")
+                            
+                            # Column quality scorecard
+                            column_scores = []
+                            for col in data['basic_info']['shape'][1:]:  # Skip first element (rows)
+                                if col in data['missing_data_analysis']:
+                                    missing_pct = data['missing_data_analysis'][col]['missing_percentage']
+                                    col_score = 100 - missing_pct
+                                    
+                                    # Determine column status
+                                    if col_score >= 95:
+                                        status = "🟢 Excellent"
+                                    elif col_score >= 85:
+                                        status = "🔵 Good"
+                                    elif col_score >= 70:
+                                        status = "🟡 Fair"
+                                    else:
+                                        status = "🔴 Poor"
+                                    
+                                    column_scores.append({
+                                        'Column': col,
+                                        'Quality Score': f"{col_score:.1f}%",
+                                        'Status': status,
+                                        'Issues': f"{data['missing_data_analysis'][col]['missing_count']} missing values"
+                                    })
+                            
+                            # Show top columns by quality
+                            st.write("**Column Quality Ranking:**")
+                            if column_scores:
+                                # Sort by quality score
+                                column_scores.sort(key=lambda x: float(x['Quality Score'].rstrip('%')), reverse=True)
+                                col_df = pd.DataFrame(column_scores[:10])  # Top 10
+                                st.dataframe(col_df, use_container_width=True)
+                        
+                        with quality_tabs[4]:
+                            if include_recommendations:
+                                st.subheader("💡 Data Quality Recommendations")
+                                
+                                recommendations = []
+                                
+                                # Missing data recommendations
+                                total_missing = data['missing_data_analysis']['_summary']['total_missing_cells']
+                                if total_missing > 0:
+                                    recommendations.append({
+                                        'Priority': '🔴 High',
+                                        'Issue': 'Missing Data',
+                                        'Description': f"Found {total_missing:,} missing values",
+                                        'Recommendation': 'Consider data imputation, removal of incomplete records, or data collection improvements'
+                                    })
+                                
+                                # Data type recommendations
+                                type_issues = 0
+                                for info in data['data_types_analysis'].values():
+                                    if info['suggestions']:
+                                        type_issues += 1
+                                
+                                if type_issues > 0:
+                                    recommendations.append({
+                                        'Priority': '🟡 Medium',
+                                        'Issue': 'Data Type Optimization',
+                                        'Description': f"{type_issues} columns could benefit from type optimization",
+                                        'Recommendation': 'Convert data types for better memory efficiency and performance'
+                                    })
+                                
+                                # Outlier recommendations
+                                if 'numerical_analysis' in data and 'message' not in data['numerical_analysis']:
+                                    total_outliers = sum([info['outliers_count'] for info in data['numerical_analysis'].values()])
+                                    if total_outliers > 0:
+                                        recommendations.append({
+                                            'Priority': '🟡 Medium',
+                                            'Issue': 'Data Outliers',
+                                            'Description': f"Detected {total_outliers} outliers in numerical columns",
+                                            'Recommendation': 'Review outliers for data entry errors or legitimate extreme values'
+                                        })
+                                
+                                # Overall quality recommendation
+                                if completeness_score >= 95:
+                                    recommendations.append({
+                                        'Priority': '🟢 Low',
+                                        'Issue': 'Overall Quality',
+                                        'Description': 'Dataset has excellent quality',
+                                        'Recommendation': 'Maintain current data collection and validation processes'
+                                    })
+                                elif completeness_score >= 85:
+                                    recommendations.append({
+                                        'Priority': '🟡 Medium',
+                                        'Issue': 'Overall Quality',
+                                        'Description': 'Dataset has good quality with room for improvement',
+                                        'Recommendation': 'Focus on reducing missing data and optimizing data types'
+                                    })
+                                else:
+                                    recommendations.append({
+                                        'Priority': '🔴 High',
+                                        'Issue': 'Overall Quality',
+                                        'Description': 'Dataset quality needs significant improvement',
+                                        'Recommendation': 'Implement comprehensive data cleaning and validation processes'
+                                    })
+                                
+                                if recommendations:
+                                    rec_df = pd.DataFrame(recommendations)
+                                    st.dataframe(rec_df, use_container_width=True)
+                    
+                    elif results['type'] == 'both':
+                        # Both datasets quality comparison
+                        st.write("**Comparative Data Quality Assessment**")
+                        
+                        data_a = results['results_a']
+                        data_b = results['results_b']
+                        
+                        # Quality comparison metrics
+                        missing_a = data_a['missing_data_analysis']['_summary']['overall_missing_percentage']
+                        missing_b = data_b['missing_data_analysis']['_summary']['overall_missing_percentage']
+                        
+                        completeness_a = 100 - missing_a
+                        completeness_b = 100 - missing_b
+                        
+                        comp_col1, comp_col2, comp_col3 = st.columns(3)
+                        
+                        with comp_col1:
+                            st.metric("📊 Dataset A Completeness", f"{completeness_a:.1f}%")
+                        
+                        with comp_col2:
+                            st.metric("📊 Dataset B Completeness", f"{completeness_b:.1f}%")
+                        
+                        with comp_col3:
+                            completeness_diff = completeness_b - completeness_a
+                            st.metric("🔄 Quality Difference", f"{completeness_diff:+.1f}%")
+                        
+                        # Quality comparison summary
+                        if completeness_diff > 5:
+                            st.success("✅ Dataset B has significantly better quality than Dataset A")
+                        elif completeness_diff < -5:
+                            st.warning("⚠️ Dataset A has significantly better quality than Dataset B")
+                        else:
+                            st.info("ℹ️ Both datasets have similar quality levels")
+            else:
+                st.info("📁 Please upload data files in the sidebar to enable data quality assessment")
+        
+        with analysis_tabs[2]:
+            st.subheader("📈 Trends & Patterns Analysis")
             
-            with analysis_tabs[2]:
-                st.subheader("📈 Trends & Patterns")
-                st.info("Coming soon: Trend analysis, seasonal patterns, and anomaly detection")
-        else:
-            st.info("📁 Please upload data files in the sidebar to enable advanced data analysis")
+            if comparator.df_a is not None or comparator.df_b is not None:
+                # Initialize dashboard
+                if 'interactive_dashboard' not in st.session_state:
+                    st.session_state.interactive_dashboard = InteractiveDashboard()
+                
+                dashboard = st.session_state.interactive_dashboard
+                
+                # Pattern analysis options
+                pattern_col1, pattern_col2 = st.columns([2, 1])
+                
+                with pattern_col1:
+                    pattern_dataset = st.selectbox(
+                        "📊 Select Dataset for Pattern Analysis:",
+                        ["Dataset A", "Dataset B", "Compare Patterns"],
+                        help="Choose which dataset to analyze for trends and patterns"
+                    )
+                
+                with pattern_col2:
+                    st.write("**Analysis Options:**")
+                    include_correlations = st.checkbox("Include Correlation Patterns", value=True)
+                    detect_outlier_patterns = st.checkbox("Detect Outlier Patterns", value=True)
+                
+                # Run pattern analysis
+                if st.button("🔍 Analyze Patterns", type="primary", key="analyze_patterns"):
+                    with st.spinner("Analyzing trends and patterns..."):
+                        
+                        if 'statistical_analyzer' not in st.session_state:
+                            st.session_state.statistical_analyzer = StatisticalAnalyzer()
+                        
+                        analyzer = st.session_state.statistical_analyzer
+                        
+                        # Get current sheet names
+                        sheet_a_name = st.session_state.get('sheet_a', 'Dataset A')
+                        sheet_b_name = st.session_state.get('sheet_b', 'Dataset B')
+                        
+                        if pattern_dataset == "Dataset A":
+                            analysis_results = analyzer.analyze_dataframe(comparator.df_a, sheet_a_name)
+                            charts = dashboard.create_comprehensive_dashboard(analysis_results)
+                            st.session_state.pattern_results = {
+                                'type': 'single',
+                                'dataset': 'A',
+                                'results': analysis_results,
+                                'charts': charts
+                            }
+                            
+                        elif pattern_dataset == "Dataset B":
+                            analysis_results = analyzer.analyze_dataframe(comparator.df_b, sheet_b_name)
+                            charts = dashboard.create_comprehensive_dashboard(analysis_results)
+                            st.session_state.pattern_results = {
+                                'type': 'single',
+                                'dataset': 'B',
+                                'results': analysis_results,
+                                'charts': charts
+                            }
+                            
+                        elif pattern_dataset == "Compare Patterns":
+                            comparison_results = analyzer.compare_datasets_statistically(
+                                comparator.df_a, comparator.df_b, sheet_a_name, sheet_b_name
+                            )
+                            charts = dashboard.create_comprehensive_dashboard(
+                                comparison_results['datasets'][sheet_a_name],
+                                comparison_results
+                            )
+                            st.session_state.pattern_results = {
+                                'type': 'comparison',
+                                'results': comparison_results,
+                                'charts': charts
+                            }
+                        
+                        st.success("✅ Pattern analysis completed!")
+                
+                # Display pattern analysis results
+                if 'pattern_results' in st.session_state:
+                    results = st.session_state.pattern_results
+                    
+                    st.divider()
+                    st.subheader("🔍 Pattern Analysis Results")
+                    
+                    if results['type'] == 'single':
+                        # Single dataset pattern analysis
+                        data = results['results']
+                        dataset_name = f"Dataset {results['dataset']}"
+                        
+                        # Pattern summary metrics
+                        pattern_col1, pattern_col2, pattern_col3, pattern_col4 = st.columns(4)
+                        
+                        # Correlation patterns
+                        if 'correlation_matrices' in data:
+                            corr_matrix = data['correlation_matrices']['pearson']
+                            strong_corrs = len([corr for corr in data.get('strong_correlations', [])])
+                            avg_correlation = data.get('correlation_summary', {}).get('average_correlation', 0)
+                            
+                            with pattern_col1:
+                                st.metric("🔗 Strong Correlations", strong_corrs)
+                            with pattern_col2:
+                                st.metric("📊 Avg Correlation", f"{avg_correlation:.3f}")
+                        
+                        # Outlier patterns
+                        if 'numerical_analysis' in data and 'message' not in data['numerical_analysis']:
+                            total_outliers = sum([info['outliers_count'] for info in data['numerical_analysis'].values()])
+                            outlier_columns = len([col for col, info in data['numerical_analysis'].items() if info['outliers_count'] > 0])
+                            
+                            with pattern_col3:
+                                st.metric("⚠️ Total Outliers", total_outliers)
+                            with pattern_col4:
+                                st.metric("📋 Columns with Outliers", outlier_columns)
+                        
+                        # Pattern visualization tabs
+                        pattern_tabs = st.tabs([
+                            "🔗 Correlation Patterns", "📊 Distribution Patterns", 
+                            "⚠️ Outlier Patterns", "🎯 Data Patterns Summary"
+                        ])
+                        
+                        charts = results['charts']
+                        
+                        with pattern_tabs[0]:
+                            if include_correlations and 'correlation' in charts:
+                                st.plotly_chart(charts['correlation'], use_container_width=True, key="pattern_corr")
+                                
+                                # Strong correlations table
+                                if 'strong_correlations' in data:
+                                    strong_corrs = data['strong_correlations']
+                                    if strong_corrs:
+                                        st.subheader("🔗 Detected Strong Correlations")
+                                        corr_df = pd.DataFrame(strong_corrs)
+                                        st.dataframe(corr_df, use_container_width=True)
+                        
+                        with pattern_tabs[1]:
+                            if 'distributions' in charts:
+                                st.plotly_chart(charts['distributions'], use_container_width=True, key="pattern_dist")
+                                
+                                # Distribution insights
+                                if 'numerical_analysis' in data and 'message' not in data['numerical_analysis']:
+                                    st.subheader("📊 Distribution Insights")
+                                    
+                                    normal_columns = []
+                                    skewed_columns = []
+                                    
+                                    for col, info in data['numerical_analysis'].items():
+                                        if 'distribution_info' in info:
+                                            dist_info = info['distribution_info']
+                                            if dist_info.get('is_normal', {}).get('is_normal', False):
+                                                normal_columns.append(col)
+                                            else:
+                                                skewed_columns.append(col)
+                                    
+                                    dist_col1, dist_col2 = st.columns(2)
+                                    
+                                    with dist_col1:
+                                        st.write("**📊 Normal Distributions:**")
+                                        if normal_columns:
+                                            for col in normal_columns:
+                                                st.write(f"✅ {col}")
+                                        else:
+                                            st.write("No columns follow normal distribution")
+                                    
+                                    with dist_col2:
+                                        st.write("**📈 Non-Normal Distributions:**")
+                                        if skewed_columns:
+                                            for col in skewed_columns:
+                                                st.write(f"⚠️ {col}")
+                                        else:
+                                            st.write("All columns follow normal distribution")
+                        
+                        with pattern_tabs[2]:
+                            if detect_outlier_patterns and 'outliers' in charts:
+                                st.plotly_chart(charts['outliers'], use_container_width=True, key="pattern_outliers")
+                                
+                                # Outlier pattern insights
+                                if 'numerical_analysis' in data and 'message' not in data['numerical_analysis']:
+                                    st.subheader("⚠️ Outlier Pattern Analysis")
+                                    
+                                    outlier_insights = []
+                                    for col, info in data['numerical_analysis'].items():
+                                        if info['outliers_count'] > 0:
+                                            outlier_pct = info['outliers_percentage']
+                                            if outlier_pct > 10:
+                                                severity = "🔴 High"
+                                            elif outlier_pct > 5:
+                                                severity = "🟡 Medium"
+                                            else:
+                                                severity = "🟢 Low"
+                                            
+                                            outlier_insights.append({
+                                                'Column': col,
+                                                'Outlier Count': info['outliers_count'],
+                                                'Outlier %': f"{outlier_pct:.2f}%",
+                                                'Severity': severity,
+                                                'Pattern': 'Potential data quality issue' if outlier_pct > 10 else 'Normal variation'
+                                            })
+                                    
+                                    if outlier_insights:
+                                        outlier_df = pd.DataFrame(outlier_insights)
+                                        st.dataframe(outlier_df, use_container_width=True)
+                        
+                        with pattern_tabs[3]:
+                            if 'data_quality' in charts:
+                                st.plotly_chart(charts['data_quality'], use_container_width=True, key="pattern_quality")
+                                
+                                # Pattern summary
+                                st.subheader("🎯 Key Pattern Insights")
+                                
+                                insights = []
+                                
+                                # Missing data pattern
+                                missing_pct = data['missing_data_analysis']['_summary']['overall_missing_percentage']
+                                if missing_pct > 20:
+                                    insights.append("🔴 High missing data percentage detected - investigate data collection process")
+                                elif missing_pct > 5:
+                                    insights.append("🟡 Moderate missing data - consider imputation strategies")
+                                else:
+                                    insights.append("🟢 Low missing data - good data completeness")
+                                
+                                # Correlation pattern
+                                if 'correlation_summary' in data:
+                                    avg_corr = data['correlation_summary'].get('average_correlation', 0)
+                                    if abs(avg_corr) > 0.5:
+                                        insights.append("� Strong correlation patterns detected - features are highly related")
+                                    elif abs(avg_corr) > 0.3:
+                                        insights.append("📊 Moderate correlation patterns found")
+                                    else:
+                                        insights.append("📈 Low correlation - features are mostly independent")
+                                
+                                # Data type pattern
+                                numeric_cols = len([col for col, info in data['data_types_analysis'].items() 
+                                                  if 'numeric' in info['current_type'].lower()])
+                                total_cols = len(data['data_types_analysis'])
+                                
+                                if numeric_cols / total_cols > 0.7:
+                                    insights.append("🔢 Dataset is primarily numeric - good for statistical analysis")
+                                elif numeric_cols / total_cols > 0.3:
+                                    insights.append("📊 Mixed data types - suitable for comprehensive analysis")
+                                else:
+                                    insights.append("📝 Dataset is primarily categorical - focus on frequency analysis")
+                                
+                                for insight in insights:
+                                    st.write(f"• {insight}")
+                    
+                    elif results['type'] == 'comparison':
+                        # Comparison pattern analysis
+                        st.write("**Comparative Pattern Analysis**")
+                        
+                        comparison_data = results['results']
+                        
+                        # Comparison pattern insights
+                        if 'statistical_tests' in comparison_data:
+                            test_results = comparison_data['statistical_tests']
+                            
+                            significant_differences = 0
+                            distribution_differences = 0
+                            
+                            for col, tests in test_results.items():
+                                if 'error' not in tests:
+                                    if tests.get('means_comparison', {}).get('significant_difference', False):
+                                        significant_differences += 1
+                                    if tests.get('distribution_tests', {}).get('distributions_significantly_different', False):
+                                        distribution_differences += 1
+                            
+                            comp_col1, comp_col2, comp_col3 = st.columns(3)
+                            
+                            with comp_col1:
+                                st.metric("📊 Significant Mean Differences", significant_differences)
+                            with comp_col2:
+                                st.metric("📈 Distribution Differences", distribution_differences)
+                            with comp_col3:
+                                st.metric("🔍 Total Tests", len(test_results))
+                        
+                        # Comparison charts
+                        if 'comparison' in results['charts']:
+                            st.plotly_chart(results['charts']['comparison'], use_container_width=True, key="pattern_comparison")
+            else:
+                st.info("�📁 Please upload data files in the sidebar to enable trend and pattern analysis")
+        
+        with analysis_tabs[3]:
+            st.subheader("� Excel Formula Analysis")
+            st.markdown("**Comprehensive analysis of Excel formulas, dependencies, and validation**")
+            
+            # Formula Analysis Interface
+            if uploaded_file_a or uploaded_file_b:
+                from excel_advanced.formula_analysis import FormulaAnalyzer
+                
+                # Formula analysis options
+                formula_col1, formula_col2 = st.columns([2, 1])
+                
+                with formula_col1:
+                    st.write("**Select Excel file for formula analysis:**")
+                    
+                    file_options = []
+                    if uploaded_file_a:
+                        file_options.append(("File A", uploaded_file_a))
+                    if uploaded_file_b:
+                        file_options.append(("File B", uploaded_file_b))
+                    
+                    selected_file_label = st.selectbox(
+                        "Choose file to analyze:",
+                        options=[label for label, _ in file_options],
+                        key="formula_file_selection"
+                    )
+                    
+                    selected_file = next(file for label, file in file_options if label == selected_file_label)
+                
+                with formula_col2:
+                    st.write("**Analysis Options:**")
+                    analyze_all_sheets = st.checkbox("Analyze all sheets", value=True, key="analyze_all_sheets")
+                    show_complex_only = st.checkbox("Show complex formulas only", value=False, key="show_complex_only")
+                
+                # Run formula analysis
+                if st.button("🔍 Analyze Excel Formulas", type="primary", key="analyze_formulas"):
+                    with st.spinner("Analyzing Excel formulas..."):
+                        analyzer = FormulaAnalyzer()
+                        
+                        # Get sheet names if not analyzing all
+                        sheet_names = None
+                        if not analyze_all_sheets:
+                            # Let user select specific sheets (simplified for now)
+                            sheet_names = None  # Will analyze all sheets
+                        
+                        # Perform analysis
+                        analysis_results = analyzer.analyze_excel_formulas(selected_file, sheet_names)
+                        
+                        if analysis_results['status'] == 'success':
+                            # Store results in session state
+                            st.session_state.formula_analysis = analysis_results
+                            st.success("✅ Formula analysis completed successfully!")
+                        else:
+                            st.error(f"❌ Analysis failed: {analysis_results.get('error', 'Unknown error')}")
+                
+                # Display results if available
+                if 'formula_analysis' in st.session_state:
+                    results = st.session_state.formula_analysis
+                    
+                    # Summary metrics
+                    st.subheader("📊 Formula Analysis Summary")
+                    
+                    stats = results.get('summary_statistics', {})
+                    overview = stats.get('overview', {})
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        st.metric("Total Formulas", overview.get('total_formulas', 0))
+                    with col2:
+                        st.metric("Sheets with Formulas", overview.get('total_sheets_with_formulas', 0))
+                    with col3:
+                        st.metric("Unique Functions", overview.get('unique_functions_used', 0))
+                    with col4:
+                        validation_score = results.get('formula_validation', {}).get('validation_summary', {}).get('validation_score', 0)
+                        st.metric("Validation Score", f"{validation_score}%")
+                    
+                    # Detailed analysis tabs
+                    result_tabs = st.tabs(["🔍 Formula Details", "⚠️ Validation Issues", "🌐 Dependencies", "📈 Statistics"])
+                    
+                    with result_tabs[0]:
+                        st.subheader("� Formula Details by Sheet")
+                        
+                        formula_extraction = results.get('formula_extraction', {})
+                        
+                        for sheet_name, sheet_data in formula_extraction.items():
+                            with st.expander(f"📊 {sheet_name} ({sheet_data['total_count']} formulas)", expanded=False):
+                                
+                                if sheet_data['total_count'] > 0:
+                                    # Show formula types distribution
+                                    col1, col2 = st.columns(2)
+                                    
+                                    with col1:
+                                        st.write("**Formula Complexity:**")
+                                        st.write(f"• Simple: {len(sheet_data['simple_formulas'])}")
+                                        st.write(f"• Complex: {len(sheet_data['complex_formulas'])}")
+                                        st.write(f"• Array: {len(sheet_data['array_formulas'])}")
+                                    
+                                    with col2:
+                                        st.write("**Function Types:**")
+                                        function_types = sheet_data.get('formula_types', {})
+                                        for func_type, formulas in list(function_types.items())[:5]:
+                                            st.write(f"• {func_type}: {len(formulas)}")
+                                    
+                                    # Show sample formulas
+                                    if not show_complex_only:
+                                        formulas_to_show = list(sheet_data['cell_formulas'].items())[:10]
+                                    else:
+                                        formulas_to_show = [(k, v) for k, v in sheet_data['cell_formulas'].items() if v['complexity'] > 10][:10]
+                                    
+                                    if formulas_to_show:
+                                        st.write("**Sample Formulas:**")
+                                        formula_display_data = []
+                                        for cell_ref, formula_info in formulas_to_show:
+                                            formula_display_data.append({
+                                                'Cell': cell_ref,
+                                                'Formula': formula_info['formula'][:100] + "..." if len(formula_info['formula']) > 100 else formula_info['formula'],
+                                                'Complexity': formula_info['complexity'],
+                                                'Functions': ', '.join(formula_info['functions_used'][:3])
+                                            })
+                                        
+                                        formula_df = pd.DataFrame(formula_display_data)
+                                        st.dataframe(formula_df, hide_index=True, use_container_width=True)
+                                else:
+                                    st.info("No formulas found in this sheet")
+                    
+                    with result_tabs[1]:
+                        st.subheader("⚠️ Formula Validation Issues")
+                        
+                        validation = results.get('formula_validation', {})
+                        validation_summary = validation.get('validation_summary', {})
+                        
+                        # Validation overview
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            missing_refs = validation_summary.get('missing_references_count', 0)
+                            st.metric("Missing References", missing_refs, delta=None if missing_refs == 0 else "Issues Found")
+                        
+                        with col2:
+                            circular_refs = validation_summary.get('circular_references_count', 0)
+                            st.metric("Circular References", circular_refs, delta=None if circular_refs == 0 else "Issues Found")
+                        
+                        with col3:
+                            external_deps = validation_summary.get('external_dependencies_count', 0)
+                            st.metric("External Dependencies", external_deps)
+                        
+                        # Show detailed issues
+                        if validation.get('missing_references'):
+                            st.write("**❌ Missing References:**")
+                            missing_data = []
+                            for issue in validation['missing_references'][:10]:
+                                missing_data.append({
+                                    'Formula Cell': issue['formula_cell'],
+                                    'Missing Reference': issue['missing_reference'],
+                                    'Formula': issue['formula'][:80] + "..." if len(issue['formula']) > 80 else issue['formula']
+                                })
+                            
+                            if missing_data:
+                                missing_df = pd.DataFrame(missing_data)
+                                st.dataframe(missing_df, hide_index=True, use_container_width=True)
+                        
+                        if validation.get('circular_references'):
+                            st.write("**🔄 Potential Circular References:**")
+                            circular_data = []
+                            for issue in validation['circular_references'][:10]:
+                                circular_data.append({
+                                    'Formula Cell': issue['formula_cell'],
+                                    'Issue': issue['issue'],
+                                    'Formula': issue['formula'][:80] + "..." if len(issue['formula']) > 80 else issue['formula']
+                                })
+                            
+                            if circular_data:
+                                circular_df = pd.DataFrame(circular_data)
+                                st.dataframe(circular_df, hide_index=True, use_container_width=True)
+                        
+                        if validation.get('external_dependencies'):
+                            st.write("**� External Dependencies:**")
+                            external_data = []
+                            for issue in validation['external_dependencies'][:10]:
+                                external_data.append({
+                                    'Formula Cell': issue['formula_cell'],
+                                    'External References': ', '.join(issue['external_refs']),
+                                    'Formula': issue['formula'][:80] + "..." if len(issue['formula']) > 80 else issue['formula']
+                                })
+                            
+                            if external_data:
+                                external_df = pd.DataFrame(external_data)
+                                st.dataframe(external_df, hide_index=True, use_container_width=True)
+                    
+                    with result_tabs[2]:
+                        st.subheader("🌐 Formula Dependencies & Impact Analysis")
+                        
+                        dependency_data = results.get('dependency_analysis', {})
+                        
+                        # Dependency overview
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            independent_count = len(dependency_data.get('independent_cells', []))
+                            st.metric("Independent Cells", independent_count)
+                        
+                        with col2:
+                            highly_connected = len(dependency_data.get('highly_connected_cells', []))
+                            st.metric("Highly Connected", highly_connected)
+                        
+                        with col3:
+                            max_level = dependency_data.get('dependency_levels', {})
+                            max_depth = max(max_level.values()) if max_level else 0
+                            st.metric("Max Dependency Depth", max_depth)
+                        
+                        # High impact cells
+                        impact_analysis = dependency_data.get('impact_analysis', {})
+                        high_impact_cells = impact_analysis.get('high_impact_cells', [])
+                        
+                        if high_impact_cells:
+                            st.write("**⚡ High Impact Cells (Changes affect many other cells):**")
+                            impact_data = []
+                            for cell_data in high_impact_cells[:10]:
+                                impact_data.append({
+                                    'Cell': cell_data['cell'],
+                                    'Direct Dependents': cell_data['direct_dependents'],
+                                    'Total Cascade Size': cell_data['total_cascade_size'],
+                                    'Impact Level': cell_data['impact_level']
+                                })
+                            
+                            impact_df = pd.DataFrame(impact_data)
+                            st.dataframe(impact_df, hide_index=True, use_container_width=True)
+                            
+                            st.warning("⚠️ **Important:** Changes to high-impact cells can affect many other formulas. Review carefully before making modifications.")
+                        else:
+                            st.info("No high-impact cells identified. Formula dependencies are well-distributed.")
+                    
+                    with result_tabs[3]:
+                        st.subheader("📈 Formula Statistics")
+                        
+                        stats = results.get('summary_statistics', {})
+                        
+                        # Complexity analysis
+                        complexity = stats.get('complexity_analysis', {})
+                        if complexity:
+                            st.write("**🧮 Complexity Distribution:**")
+                            
+                            complexity_col1, complexity_col2 = st.columns(2)
+                            
+                            with complexity_col1:
+                                st.metric("Average Complexity", complexity.get('average_complexity', 0))
+                                st.metric("Median Complexity", complexity.get('median_complexity', 0))
+                            
+                            with complexity_col2:
+                                st.write(f"• Simple (≤5): **{complexity.get('simple_formulas', 0)}**")
+                                st.write(f"• Moderate (6-15): **{complexity.get('moderate_formulas', 0)}**")
+                                st.write(f"• Complex (>15): **{complexity.get('complex_formulas', 0)}**")
+                        
+                        # Function usage
+                        function_usage = stats.get('function_usage', {})
+                        if function_usage and function_usage.get('top_10_functions'):
+                            st.write("**📊 Most Used Functions:**")
+                            
+                            function_data = []
+                            for func, count in function_usage['top_10_functions']:
+                                function_data.append({
+                                    'Function': func,
+                                    'Usage Count': count,
+                                    'Percentage': f"{count / function_usage['total_function_calls'] * 100:.1f}%" if function_usage['total_function_calls'] > 0 else "0%"
+                                })
+                            
+                            function_df = pd.DataFrame(function_data)
+                            st.dataframe(function_df, hide_index=True, use_container_width=True)
+                        
+                        # Quality metrics
+                        quality = stats.get('quality_metrics', {})
+                        if quality:
+                            st.write("**✅ Quality Assessment:**")
+                            
+                            quality_col1, quality_col2 = st.columns(2)
+                            
+                            with quality_col1:
+                                validation_score = quality.get('validation_score', 0)
+                                if validation_score >= 90:
+                                    st.success(f"🟢 Validation Score: {validation_score}% (Excellent)")
+                                elif validation_score >= 70:
+                                    st.info(f"🟡 Validation Score: {validation_score}% (Good)")
+                                else:
+                                    st.warning(f"🔴 Validation Score: {validation_score}% (Needs Attention)")
+                            
+                            with quality_col2:
+                                error_rate = quality.get('error_rate', 0)
+                                risk_level = quality.get('circular_reference_risk', 'LOW')
+                                st.write(f"• Error Rate: **{error_rate}%**")
+                                st.write(f"• Circular Ref Risk: **{risk_level}**")
+                
+                # Export formula analysis results
+                if 'formula_analysis' in st.session_state:
+                    st.subheader("📥 Export Formula Analysis")
+                    
+                    export_col1, export_col2 = st.columns(2)
+                    
+                    with export_col1:
+                        if st.button("📋 Export Summary Report", key="export_formula_summary"):
+                            # Create summary report
+                            results = st.session_state.formula_analysis
+                            stats = results.get('summary_statistics', {})
+                            
+                            summary_text = f"""# Excel Formula Analysis Report
+Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+## Summary Statistics
+- Total Formulas: {stats.get('overview', {}).get('total_formulas', 0)}
+- Sheets Analyzed: {stats.get('overview', {}).get('total_sheets_with_formulas', 0)}
+- Unique Functions: {stats.get('overview', {}).get('unique_functions_used', 0)}
+- Validation Score: {results.get('formula_validation', {}).get('validation_summary', {}).get('validation_score', 0)}%
+
+## Quality Assessment
+- Error Rate: {stats.get('quality_metrics', {}).get('error_rate', 0)}%
+- Circular Reference Risk: {stats.get('quality_metrics', {}).get('circular_reference_risk', 'Unknown')}
+- External Dependency Rate: {stats.get('quality_metrics', {}).get('external_dependency_rate', 0)}%
+"""
+                            
+                            st.download_button(
+                                label="💾 Download Summary (TXT)",
+                                data=summary_text,
+                                file_name=f"formula_analysis_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                                mime="text/plain"
+                            )
+                    
+                    with export_col2:
+                        st.info("📊 Additional export formats coming soon:\n• Excel report with detailed analysis\n• CSV data for further processing\n• Interactive dependency diagrams")
+            
+            else:
+                st.info("📁 Please upload Excel files in the sidebar to enable formula analysis")
+                
+                st.markdown("""
+                **📝 Formula Analysis Features:**
+                
+                🔍 **Formula Extraction**
+                - Extract all formulas from Excel cells
+                - Categorize by complexity and type
+                - Identify array formulas and complex calculations
+                
+                ⚠️ **Formula Validation**
+                - Detect broken formulas and missing references
+                - Identify circular reference issues
+                - Validate external dependencies
+                
+                🌐 **Dependency Mapping**
+                - Build formula dependency trees
+                - Identify high-impact cells
+                - Analyze cascade effects of changes
+                
+                📊 **Statistical Analysis**
+                - Formula complexity distribution
+                - Function usage patterns
+                - Quality assessment scores
+                """)
+        
+        with analysis_tabs[4]:
+            st.subheader("🎨 Excel Formatting Comparison")
+            st.markdown("**Comprehensive analysis of Excel formatting differences, conditional formatting, and structure**")
+            
+            # Formatting Comparison Interface
+            if uploaded_file_a and uploaded_file_b:
+                from excel_advanced.formatting_comparison import FormattingComparator
+                
+                # Formatting comparison options
+                format_col1, format_col2 = st.columns([2, 1])
+                
+                with format_col1:
+                    st.write("**Select sheets to compare formatting:**")
+                    
+                    # Get available sheets
+                    try:
+                        from openpyxl import load_workbook
+                        
+                        wb_a = load_workbook(uploaded_file_a, read_only=True)
+                        wb_b = load_workbook(uploaded_file_b, read_only=True)
+                        
+                        sheets_a = wb_a.sheetnames
+                        sheets_b = wb_b.sheetnames
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            selected_sheet_a = st.selectbox(
+                                "Sheet from File A:",
+                                options=sheets_a,
+                                key="format_sheet_a"
+                            )
+                        
+                        with col2:
+                            selected_sheet_b = st.selectbox(
+                                "Sheet from File B:",
+                                options=sheets_b,
+                                key="format_sheet_b"
+                            )
+                        
+                        wb_a.close()
+                        wb_b.close()
+                        
+                    except Exception as e:
+                        st.error(f"Error reading Excel files: {str(e)}")
+                        selected_sheet_a = None
+                        selected_sheet_b = None
+                
+                with format_col2:
+                    st.write("**Comparison Options:**")
+                    include_structure = st.checkbox("Include structure comparison", value=True, key="include_structure")
+                    include_conditional = st.checkbox("Include conditional formatting", value=True, key="include_conditional")
+                    show_detailed_diff = st.checkbox("Show detailed differences", value=False, key="show_detailed_diff")
+                
+                # Run formatting comparison
+                if st.button("🎨 Compare Excel Formatting", type="primary", key="compare_formatting"):
+                    with st.spinner("Analyzing Excel formatting differences..."):
+                        try:
+                            comparator_fmt = FormattingComparator()
+                            
+                            # Perform formatting comparison
+                            format_results = comparator_fmt.compare_excel_formatting(
+                                uploaded_file_a, uploaded_file_b,
+                                selected_sheet_a, selected_sheet_b
+                            )
+                            
+                            if format_results['status'] == 'success':
+                                # Store results in session state
+                                st.session_state.formatting_comparison = format_results
+                                st.success("✅ Formatting comparison completed successfully!")
+                            else:
+                                st.error(f"❌ Comparison failed: {format_results.get('error', 'Unknown error')}")
+                        
+                        except Exception as e:
+                            st.error(f"❌ Error during formatting comparison: {str(e)}")
+                
+                # Display results if available
+                if 'formatting_comparison' in st.session_state:
+                    results = st.session_state.formatting_comparison
+                    
+                    # Summary metrics
+                    st.subheader("📊 Formatting Comparison Summary")
+                    
+                    cell_formatting = results.get('cell_formatting', {})
+                    structure_comparison = results.get('structure_comparison', {})
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        cells_compared = cell_formatting.get('total_cells_compared', 0)
+                        st.metric("Cells Compared", cells_compared)
+                    
+                    with col2:
+                        cells_different = cell_formatting.get('cells_with_differences', 0)
+                        st.metric("Cells with Differences", cells_different)
+                    
+                    with col3:
+                        diff_percentage = cell_formatting.get('difference_percentage', 0)
+                        st.metric("Difference %", f"{diff_percentage:.1f}%")
+                    
+                    with col4:
+                        merged_diff = structure_comparison.get('merged_cells', {}).get('differences_count', 0)
+                        st.metric("Structure Changes", merged_diff)
+                    
+                    # Detailed analysis tabs
+                    format_result_tabs = st.tabs(["🎨 Cell Formatting", "📏 Structure Changes", "🔥 Conditional Formatting", "📊 Statistics"])
+                    
+                    with format_result_tabs[0]:
+                        st.subheader("🎨 Cell Formatting Differences")
+                        
+                        categorized_diff = cell_formatting.get('categorized_differences', {})
+                        
+                        # Show formatting categories with differences
+                        for category, differences in categorized_diff.items():
+                            if differences:
+                                category_name = category.replace('_differences', '').replace('_', ' ').title()
+                                
+                                with st.expander(f"📝 {category_name} ({len(differences)} changes)", expanded=False):
+                                    
+                                    if len(differences) <= 20:
+                                        # Show all differences for small lists
+                                        diff_data = []
+                                        for diff in differences:
+                                            changes_summary = ', '.join(diff['changes'][:3])  # First 3 changes
+                                            if len(diff['changes']) > 3:
+                                                changes_summary += f" + {len(diff['changes']) - 3} more"
+                                            
+                                            diff_data.append({
+                                                'Cell': diff['cell'],
+                                                'Changes': changes_summary
+                                            })
+                                        
+                                        if diff_data:
+                                            diff_df = pd.DataFrame(diff_data)
+                                            st.dataframe(diff_df, hide_index=True, use_container_width=True)
+                                    else:
+                                        # Show summary for large lists
+                                        st.write(f"**{len(differences)} formatting changes detected**")
+                                        sample_cells = [diff['cell'] for diff in differences[:10]]
+                                        st.write(f"**Sample cells:** {', '.join(sample_cells)}")
+                                        
+                                        if st.button(f"Show all {category_name} changes", key=f"show_all_{category}"):
+                                            st.write("**All changes:**")
+                                            for diff in differences:
+                                                st.write(f"• **{diff['cell']}**: {', '.join(diff['changes'][:2])}")
+                        
+                        # Show most significant changes if available
+                        format_diff_report = results.get('formatting_diff_report', {})
+                        significant_changes = format_diff_report.get('most_significant_changes', [])
+                        
+                        if significant_changes:
+                            st.write("**🔥 Most Significant Formatting Changes:**")
+                            
+                            for i, change in enumerate(significant_changes[:10], 1):
+                                with st.expander(f"#{i} {change['cell']} (Score: {change['significance_score']})", expanded=False):
+                                    for category, changes in change['differences'].items():
+                                        if changes:
+                                            st.write(f"**{category.title()}:**")
+                                            for change_detail in changes:
+                                                st.write(f"  • {change_detail}")
+                    
+                    with format_result_tabs[1]:
+                        st.subheader("📏 Sheet Structure Comparison")
+                        
+                        structure = results.get('structure_comparison', {})
+                        
+                        # Merged cells comparison
+                        merged_cells = structure.get('merged_cells', {})
+                        if merged_cells.get('differences_count', 0) > 0:
+                            st.write("**🔗 Merged Cells Changes:**")
+                            
+                            col1, col2, col3 = st.columns(3)
+                            
+                            with col1:
+                                st.metric("File A Merged", merged_cells.get('sheet_a_merged', 0))
+                            with col2:
+                                st.metric("File B Merged", merged_cells.get('sheet_b_merged', 0))
+                            with col3:
+                                st.metric("Common Merged", merged_cells.get('common_merged', 0))
+                            
+                            if merged_cells.get('only_in_a'):
+                                st.write("**Only in File A:**")
+                                st.write(", ".join(merged_cells['only_in_a'][:10]))
+                            
+                            if merged_cells.get('only_in_b'):
+                                st.write("**Only in File B:**")
+                                st.write(", ".join(merged_cells['only_in_b'][:10]))
+                        else:
+                            st.info("✅ No differences in merged cells")
+                        
+                        # Column dimensions
+                        col_dims = structure.get('column_dimensions', {})
+                        if col_dims.get('total_differences', 0) > 0:
+                            st.write("**📐 Column Dimension Changes:**")
+                            
+                            col_changes = col_dims.get('differences', [])
+                            if col_changes:
+                                col_data = []
+                                for change in col_changes[:20]:
+                                    col_data.append({
+                                        'Column': change['column'],
+                                        'Change Type': change['change'],
+                                        'Details': f"Width A: {change.get('width_a', 'N/A')}, Width B: {change.get('width_b', 'N/A')}"
+                                    })
+                                
+                                if col_data:
+                                    col_df = pd.DataFrame(col_data)
+                                    st.dataframe(col_df, hide_index=True, use_container_width=True)
+                        else:
+                            st.info("✅ No differences in column dimensions")
+                        
+                        # Row dimensions
+                        row_dims = structure.get('row_dimensions', {})
+                        if row_dims.get('total_differences', 0) > 0:
+                            st.write("**📏 Row Dimension Changes:**")
+                            
+                            row_changes = row_dims.get('differences', [])
+                            if row_changes and len(row_changes) <= 20:
+                                row_data = []
+                                for change in row_changes:
+                                    row_data.append({
+                                        'Row': change['row'],
+                                        'Change Type': change['change'],
+                                        'Details': f"Height A: {change.get('height_a', 'N/A')}, Height B: {change.get('height_b', 'N/A')}"
+                                    })
+                                
+                                if row_data:
+                                    row_df = pd.DataFrame(row_data)
+                                    st.dataframe(row_df, hide_index=True, use_container_width=True)
+                            elif row_changes:
+                                st.write(f"**{len(row_changes)} row dimension changes detected**")
+                        else:
+                            st.info("✅ No differences in row dimensions")
+                        
+                        # Sheet properties
+                        sheet_props = structure.get('sheet_properties', {})
+                        if sheet_props.get('differences_count', 0) > 0:
+                            st.write("**🏷️ Sheet Property Changes:**")
+                            
+                            for prop_change in sheet_props.get('differences', []):
+                                st.write(f"• **{prop_change['property'].title()}**: {prop_change['value_a']} → {prop_change['value_b']}")
+                        else:
+                            st.info("✅ No differences in sheet properties")
+                    
+                    with format_result_tabs[2]:
+                        st.subheader("🔥 Conditional Formatting Comparison")
+                        
+                        cf_comparison = results.get('conditional_formatting', {})
+                        
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            st.metric("Rules in File A", cf_comparison.get('sheet_a_rules', 0))
+                        with col2:
+                            st.metric("Rules in File B", cf_comparison.get('sheet_b_rules', 0))
+                        with col3:
+                            rule_diff = cf_comparison.get('rules_comparison', {}).get('rule_difference', 0)
+                            st.metric("Rule Difference", rule_diff)
+                        
+                        # Show conditional formatting rules details
+                        if cf_comparison.get('rules_details_a') or cf_comparison.get('rules_details_b'):
+                            st.write("**📋 Conditional Formatting Rules:**")
+                            
+                            cf_col1, cf_col2 = st.columns(2)
+                            
+                            with cf_col1:
+                                st.write("**File A Rules:**")
+                                rules_a = cf_comparison.get('rules_details_a', [])
+                                if rules_a:
+                                    for i, rule in enumerate(rules_a[:10], 1):
+                                        st.write(f"{i}. {rule['type']} on {rule['range']}")
+                                else:
+                                    st.info("No conditional formatting rules")
+                            
+                            with cf_col2:
+                                st.write("**File B Rules:**")
+                                rules_b = cf_comparison.get('rules_details_b', [])
+                                if rules_b:
+                                    for i, rule in enumerate(rules_b[:10], 1):
+                                        st.write(f"{i}. {rule['type']} on {rule['range']}")
+                                else:
+                                    st.info("No conditional formatting rules")
+                        else:
+                            st.info("No conditional formatting rules found in either file")
+                    
+                    with format_result_tabs[3]:
+                        st.subheader("📊 Formatting Statistics")
+                        
+                        stats = results.get('summary_statistics', {})
+                        
+                        # Overview statistics
+                        overview = stats.get('overview', {})
+                        if overview:
+                            st.write("**📈 Overview:**")
+                            col1, col2, col3 = st.columns(3)
+                            
+                            with col1:
+                                st.metric(
+                                    "Formatted Cells A", 
+                                    overview.get('total_formatted_cells_a', 0)
+                                )
+                            with col2:
+                                st.metric(
+                                    "Formatted Cells B", 
+                                    overview.get('total_formatted_cells_b', 0)
+                                )
+                            with col3:
+                                coverage_change = overview.get('formatting_coverage_change', 0)
+                                st.metric(
+                                    "Coverage Change", 
+                                    coverage_change,
+                                    delta=coverage_change
+                                )
+                        
+                        # Formatting types breakdown
+                        formatting_types = stats.get('formatting_types', {})
+                        if formatting_types:
+                            st.write("**🎨 Formatting Types Comparison:**")
+                            
+                            type_data = []
+                            for fmt_type, counts in formatting_types.items():
+                                type_data.append({
+                                    'Formatting Type': fmt_type.replace('_', ' ').title(),
+                                    'File A': counts.get('sheet_a', 0),
+                                    'File B': counts.get('sheet_b', 0),
+                                    'Change': counts.get('change', 0)
+                                })
+                            
+                            if type_data:
+                                type_df = pd.DataFrame(type_data)
+                                st.dataframe(type_df, hide_index=True, use_container_width=True)
+                        
+                        # Complexity metrics
+                        complexity = stats.get('complexity_metrics', {})
+                        if complexity:
+                            st.write("**🔧 Complexity Metrics:**")
+                            
+                            comp_col1, comp_col2 = st.columns(2)
+                            
+                            with comp_col1:
+                                st.write("**Merged Cells:**")
+                                st.write(f"• File A: {complexity.get('merged_cells_a', 0)}")
+                                st.write(f"• File B: {complexity.get('merged_cells_b', 0)}")
+                            
+                            with comp_col2:
+                                st.write("**Conditional Formatting:**")
+                                st.write(f"• File A: {complexity.get('conditional_formatting_a', 0)}")
+                                st.write(f"• File B: {complexity.get('conditional_formatting_b', 0)}")
+                        
+                        # Change impact assessment
+                        format_diff_report = results.get('formatting_diff_report', {})
+                        impact_assessment = format_diff_report.get('change_impact_assessment', {})
+                        
+                        if impact_assessment:
+                            st.write("**⚡ Change Impact Assessment:**")
+                            
+                            impact_level = impact_assessment.get('impact_level', 'Unknown')
+                            summary = impact_assessment.get('summary', 'No assessment available')
+                            
+                            if impact_level == 'High':
+                                st.error(f"🔴 **{impact_level} Impact**: {summary}")
+                            elif impact_level == 'Medium':
+                                st.warning(f"🟡 **{impact_level} Impact**: {summary}")
+                            elif impact_level == 'Low':
+                                st.info(f"🟢 **{impact_level} Impact**: {summary}")
+                            else:
+                                st.info(f"ℹ️ **{impact_level} Impact**: {summary}")
+                
+                # Export formatting comparison results
+                if 'formatting_comparison' in st.session_state:
+                    st.subheader("📥 Export Formatting Analysis")
+                    
+                    export_col1, export_col2 = st.columns(2)
+                    
+                    with export_col1:
+                        if st.button("📋 Export Formatting Report", key="export_formatting_summary"):
+                            # Create formatting report
+                            results = st.session_state.formatting_comparison
+                            
+                            summary_text = f"""# Excel Formatting Comparison Report
+Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+## Files Compared
+- File A: {results['files_compared']['file_a']} (Sheet: {results['files_compared']['sheet_a']})
+- File B: {results['files_compared']['file_b']} (Sheet: {results['files_compared']['sheet_b']})
+
+## Summary Statistics
+- Cells Compared: {results['cell_formatting']['total_cells_compared']}
+- Cells with Differences: {results['cell_formatting']['cells_with_differences']}
+- Difference Percentage: {results['cell_formatting']['difference_percentage']:.2f}%
+
+## Impact Assessment
+{results.get('formatting_diff_report', {}).get('change_impact_assessment', {}).get('summary', 'No assessment available')}
+
+## Structure Changes
+- Merged Cells Differences: {results['structure_comparison']['merged_cells']['differences_count']}
+- Column Dimension Changes: {results['structure_comparison']['column_dimensions']['total_differences']}
+- Row Dimension Changes: {results['structure_comparison']['row_dimensions']['total_differences']}
+"""
+                            
+                            st.download_button(
+                                label="💾 Download Report (TXT)",
+                                data=summary_text,
+                                file_name=f"formatting_comparison_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                                mime="text/plain"
+                            )
+                    
+                    with export_col2:
+                        st.info("📊 Additional export formats coming soon:\n• Excel report with side-by-side comparison\n• JSON data for integration\n• Visual formatting diff images")
+            
+            elif uploaded_file_a or uploaded_file_b:
+                st.warning("📝 **Note**: Formatting comparison requires both File A and File B to be uploaded.")
+                
+                st.markdown("""
+                **🎨 Formatting Comparison Features:**
+                
+                📝 **Cell Formatting Analysis**
+                - Font, color, and border comparison
+                - Number format differences detection
+                - Alignment and style change analysis
+                
+                🔥 **Conditional Formatting**
+                - Rule extraction and comparison
+                - Formatting condition analysis
+                - Visual formatting difference detection
+                
+                📏 **Structure Comparison**
+                - Merged cell identification and changes
+                - Column width and row height analysis
+                - Sheet protection settings comparison
+                
+                📊 **Impact Assessment**
+                - Significance scoring for changes
+                - Change impact categorization
+                - Comprehensive statistics and reporting
+                """)
+            
+            else:
+                st.info("📁 Please upload Excel files in the sidebar to enable formatting comparison")
+                
+                st.markdown("""
+                **🎨 Excel Formatting Comparison Features:**
+                
+                📝 **Cell-Level Formatting**
+                - Compare fonts, colors, borders between sheets
+                - Detect number format differences
+                - Analyze alignment and text formatting changes
+                
+                🔥 **Conditional Formatting Rules**
+                - Extract and compare conditional formatting rules
+                - Identify changes in formatting conditions
+                - Visual comparison of formatting logic
+                
+                📏 **Sheet Structure Analysis**
+                - Compare merged cell ranges
+                - Detect column width and row height changes
+                - Analyze sheet protection and properties
+                
+                ⚡ **Smart Change Detection**
+                - Significance scoring for formatting changes
+                - Impact assessment for visual changes
+                - Comprehensive difference reporting
+                """)
     
     # REPORTS & EXPORT TAB
     with main_tabs[4]:

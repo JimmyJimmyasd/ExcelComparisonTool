@@ -3,7 +3,7 @@
 
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any, TYPE_CHECKING
 import streamlit as st
 import base64
 import io
@@ -15,28 +15,41 @@ try:
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
     PLOTLY_AVAILABLE = True
-    PlotlyFigure = go.Figure
 except ImportError:
     PLOTLY_AVAILABLE = False
+    # Create mock objects for when plotly is not available
+    class MockFigure:
+        pass
+    go = type('MockGO', (), {'Figure': MockFigure})()
+    px = None
+    make_subplots = None
     print("Warning: plotly not available. Interactive charts will be disabled.")
-    # Create dummy objects to prevent errors
-    class DummyPlotly:
-        def __init__(self):
-            pass
-        def __getattr__(self, name):
-            return lambda *args, **kwargs: None
-    
-    class DummyFigure:
-        def __init__(self):
-            pass
-        def __getattr__(self, name):
-            return lambda *args, **kwargs: self
-    
-    px = DummyPlotly()
-    go = DummyPlotly()
-    PlotlyFigure = DummyFigure
-    make_subplots = DummyPlotly()
-    PlotlyFigure = Any  # Use Any type when plotly is not available
+
+# Type alias for Plotly Figure that works in all cases
+if TYPE_CHECKING:
+    from plotly.graph_objects import Figure as PlotlyFigure
+else:
+    if PLOTLY_AVAILABLE:
+        PlotlyFigure = go.Figure
+    else:
+        # Create dummy objects to prevent errors only when plotly is not available
+        class DummyPlotly:
+            def __init__(self):
+                pass
+            def __getattr__(self, name):
+                return lambda *args, **kwargs: None
+        
+        class DummyFigure:
+            def __init__(self):
+                pass
+            def __getattr__(self, name):
+                return lambda *args, **kwargs: self
+        
+        px = DummyPlotly()
+        go = DummyPlotly()
+        PlotlyFigure = DummyFigure
+        make_subplots = DummyPlotly()
+        PlotlyFigure = Any  # Use Any type when plotly is not available
 
 class StatisticalVisualizer:
     """
@@ -44,8 +57,21 @@ class StatisticalVisualizer:
     """
     
     def __init__(self):
-        self.color_palette = px.colors.qualitative.Set3
-        self.sequential_colors = px.colors.sequential.Viridis
+        # Initialize color palettes with proper error handling
+        if PLOTLY_AVAILABLE and px is not None:
+            self.color_palette = px.colors.qualitative.Set3
+            self.sequential_colors = px.colors.sequential.Viridis
+        else:
+            # Fallback color palette if plotly is not available
+            self.color_palette = [
+                '#8dd3c7', '#ffffb3', '#bebada', '#fb8072', '#80b1d3',
+                '#fdb462', '#b3de69', '#fccde5', '#d9d9d9', '#bc80bd',
+                '#ccebc5', '#ffed6f'
+            ]
+            self.sequential_colors = [
+                '#440154', '#482878', '#3e4989', '#31688e', '#26828e',
+                '#1f9e89', '#35b779', '#6ece58', '#b5de2b', '#fde725'
+            ]
     
     def create_descriptive_stats_chart(self, desc_stats: Dict, title: str = "Descriptive Statistics") -> PlotlyFigure:
         """Create a comprehensive descriptive statistics chart"""

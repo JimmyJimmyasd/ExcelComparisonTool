@@ -335,6 +335,136 @@ class StatisticalAnalyzer:
             }
         }
     
+    def compare_datasets_statistically(self, df1: pd.DataFrame, df2: pd.DataFrame, 
+                                     name1: str = "Dataset A", name2: str = "Dataset B") -> Dict:
+        """Compare statistical properties between two datasets"""
+        results1 = self.analyze_dataframe(df1, name1)
+        results2 = self.analyze_dataframe(df2, name2)
+        
+        comparison = {
+            'datasets': {name1: results1, name2: results2},
+            'comparison_summary': self._create_dataset_comparison(results1, results2, name1, name2),
+            'statistical_tests': self._perform_comparison_tests(df1, df2, name1, name2)
+        }
+        
+        return comparison
+    
+    def _create_dataset_comparison(self, results1: Dict, results2: Dict, name1: str, name2: str) -> Dict:
+        """Create comprehensive comparison between two datasets"""
+        comparison = {}
+        
+        # Basic comparison
+        basic1 = results1['basic_info']
+        basic2 = results2['basic_info']
+        
+        comparison['basic_comparison'] = {
+            'shape_difference': {
+                'rows': basic2['total_rows'] - basic1['total_rows'],
+                'columns': basic2['total_columns'] - basic1['total_columns']
+            },
+            'size_comparison': {
+                f'{name1}_size': basic1['total_cells'],
+                f'{name2}_size': basic2['total_cells'],
+                'size_ratio': basic2['total_cells'] / basic1['total_cells'] if basic1['total_cells'] > 0 else 0
+            }
+        }
+        
+        # Missing data comparison
+        missing1 = results1['missing_data_analysis']['_summary']
+        missing2 = results2['missing_data_analysis']['_summary']
+        
+        comparison['missing_data_comparison'] = {
+            f'{name1}_missing_percentage': missing1['overall_missing_percentage'],
+            f'{name2}_missing_percentage': missing2['overall_missing_percentage'],
+            'missing_difference': missing2['overall_missing_percentage'] - missing1['overall_missing_percentage']
+        }
+        
+        return comparison
+    
+    def _perform_comparison_tests(self, df1: pd.DataFrame, df2: pd.DataFrame, 
+                                name1: str, name2: str) -> Dict:
+        """Perform statistical tests between datasets"""
+        if not SCIPY_AVAILABLE:
+            return {'message': 'Statistical tests require scipy package'}
+        
+        numeric_df1 = df1.select_dtypes(include=[np.number])
+        numeric_df2 = df2.select_dtypes(include=[np.number])
+        
+        common_columns = set(numeric_df1.columns) & set(numeric_df2.columns)
+        test_results = {}
+        
+        for column in common_columns:
+            data1 = numeric_df1[column].dropna()
+            data2 = numeric_df2[column].dropna()
+            
+            if len(data1) < 2 or len(data2) < 2:
+                continue
+            
+            try:
+                # T-test for means
+                t_stat, t_p = stats.ttest_ind(data1, data2)
+                
+                # Mann-Whitney U test (non-parametric)
+                u_stat, u_p = stats.mannwhitneyu(data1, data2, alternative='two-sided')
+                
+                # Kolmogorov-Smirnov test for distributions
+                ks_stat, ks_p = stats.ks_2samp(data1, data2)
+                
+                test_results[column] = {
+                    'means_comparison': {
+                        f'{name1}_mean': float(data1.mean()),
+                        f'{name2}_mean': float(data2.mean()),
+                        'difference': float(data2.mean() - data1.mean()),
+                        't_test_p_value': float(t_p),
+                        'significant_difference': t_p < 0.05
+                    },
+                    'distribution_tests': {
+                        'mannwhitney_p_value': float(u_p),
+                        'ks_test_p_value': float(ks_p),
+                        'distributions_significantly_different': ks_p < 0.05
+                    }
+                }
+            except Exception as e:
+                test_results[column] = {'error': str(e)}
+        
+        return test_results
+    
+    def create_visualization_data(self, analysis_results: Dict) -> Dict:
+        """Prepare data for Plotly visualizations"""
+        viz_data = {}
+        
+        # Correlation heatmap data
+        if 'correlation_matrices' in analysis_results:
+            corr_matrix = analysis_results['correlation_matrices']['pearson']
+            viz_data['correlation_heatmap'] = {
+                'z': corr_matrix.values.tolist(),
+                'x': corr_matrix.columns.tolist(),
+                'y': corr_matrix.index.tolist(),
+                'colorscale': 'RdBu'
+            }
+        
+        # Missing data chart
+        if 'missing_data_analysis' in analysis_results:
+            missing_data = {}
+            for col, data in analysis_results['missing_data_analysis'].items():
+                if col != '_summary':
+                    missing_data[col] = data['missing_percentage']
+            
+            viz_data['missing_data_chart'] = {
+                'x': list(missing_data.keys()),
+                'y': list(missing_data.values())
+            }
+        
+        # Distribution histograms
+        if 'numerical_analysis' in analysis_results:
+            viz_data['histograms'] = {}
+            for col, data in analysis_results['numerical_analysis'].items():
+                if 'distribution_info' in data and 'histogram_data' in data['distribution_info']:
+                    hist_data = data['distribution_info']['histogram_data']
+                    viz_data['histograms'][col] = hist_data
+        
+        return viz_data
+    
     def generate_statistical_summary(self, df: pd.DataFrame, sheet_name: str = "Sheet") -> str:
         """Generate a human-readable statistical summary"""
         analysis = self.analyze_dataframe(df, sheet_name)
@@ -373,5 +503,11 @@ class StatisticalAnalyzer:
             
             if most_variable:
                 summary_parts.append(f"   • Most Variable Column: {most_variable} (CV: {highest_cv:.1f}%)")
+        
+        # Outlier summary
+        if 'numerical_analysis' in analysis and 'message' not in analysis['numerical_analysis']:
+            total_outliers = sum([data['outliers_count'] for data in analysis['numerical_analysis'].values()])
+            if total_outliers > 0:
+                summary_parts.append(f"\n⚠️  Outliers Detected: {total_outliers} total outliers found")
         
         return "\n".join(summary_parts)
